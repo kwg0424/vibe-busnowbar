@@ -3,6 +3,7 @@ package com.example.busnowbar.data
 import android.content.Context
 import com.example.busnowbar.util.DailySchedule
 import java.time.DayOfWeek
+import kotlin.math.abs
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -14,21 +15,35 @@ data class MonitoredStop(
     val routeName: String,
 )
 
+/**
+ * 알림 일정 하나 — 고른 요일의 [startHour]:[startMinute]~[endHour]:[endMinute] 동안 폴링한다.
+ * [paused]면 삭제하지 않고 건너뛴다.
+ */
+data class AlertSchedule(
+    val id: Long,
+    val days: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
+    val startHour: Int = DailySchedule.START_HOUR,
+    val startMinute: Int = DailySchedule.START_MINUTE,
+    val endHour: Int = DailySchedule.END_HOUR,
+    val endMinute: Int = DailySchedule.END_MINUTE,
+    val paused: Boolean = false,
+) {
+    /** 일시정지가 아니고 요일이 하나라도 골라져 있어야 실제로 동작한다. */
+    val isActive: Boolean
+        get() = !paused && days.isNotEmpty()
+}
+
 /** 서울시 버스 Open API 서비스키와 등록된 정류소 목록. 전부 사용자가 입력/선택한다 — 소스에 두지 않는다. */
 data class BusSettings(
     /** 전체 기능 켜기/끄기. 꺼져 있으면 예약된 자동 폴링을 하지 않는다("지금 폴링 테스트"는 예외). */
     val enabled: Boolean = true,
     val apiKey: String = "",
+    /** 구글 지도 SDK 키. 비어 있으면 빌드 때 local.properties 로 넣은 키를 쓴다. */
+    val mapsApiKey: String = "",
     val stops: List<MonitoredStop> = emptyList(),
-    /** 매일 이 시각부터 폴링을 시작한다. */
-    val startHour: Int = DailySchedule.START_HOUR,
-    val startMinute: Int = DailySchedule.START_MINUTE,
-    /** 이 시각이 되면 폴링을 멈춘다. */
-    val endHour: Int = DailySchedule.END_HOUR,
-    val endMinute: Int = DailySchedule.END_MINUTE,
-    /** 자동 폴링을 실행할 요일. 기본은 매일. */
-    val activeDays: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
-    /** 도착정보를 다시 조회해 알림을 갱신하는 간격(초). 5/10/20/30 중 선택. */
+    /** 알림 일정 목록. 일정마다 요일/시간대/일시정지를 따로 가진다. */
+    val schedules: List<AlertSchedule> = listOf(AlertSchedule(id = 1)),
+    /** 도착정보를 다시 조회해 알림을 갱신하는 간격(초). 10/15/30 중 선택. */
     val pollIntervalSeconds: Int = DEFAULT_POLL_INTERVAL_SECONDS,
 ) {
     val isConfigured: Boolean
@@ -36,7 +51,7 @@ data class BusSettings(
 
     companion object {
         const val DEFAULT_POLL_INTERVAL_SECONDS = 30
-        val POLL_INTERVAL_OPTIONS = listOf(5, 10, 20, 30)
+        val POLL_INTERVAL_OPTIONS = listOf(10, 15, 30)
     }
 }
 
@@ -47,27 +62,85 @@ class BusSettingsStore(context: Context) {
     fun load(): BusSettings = BusSettings(
         enabled = prefs.getBoolean(KEY_ENABLED, true),
         apiKey = prefs.getString(KEY_API_KEY, "").orEmpty(),
+        mapsApiKey = prefs.getString(KEY_MAPS_API_KEY, "").orEmpty(),
         stops = parseStops(prefs.getString(KEY_STOPS, null)),
-        startHour = prefs.getInt(KEY_START_HOUR, DailySchedule.START_HOUR),
-        startMinute = prefs.getInt(KEY_START_MINUTE, DailySchedule.START_MINUTE),
-        endHour = prefs.getInt(KEY_END_HOUR, DailySchedule.END_HOUR),
-        endMinute = prefs.getInt(KEY_END_MINUTE, DailySchedule.END_MINUTE),
-        activeDays = parseActiveDays(prefs.getInt(KEY_ACTIVE_DAYS, ALL_DAYS_MASK)),
-        pollIntervalSeconds = prefs.getInt(KEY_POLL_INTERVAL_SECONDS, BusSettings.DEFAULT_POLL_INTERVAL_SECONDS),
+        schedules = loadSchedules(),
+        pollIntervalSeconds = nearestPollInterval(
+            prefs.getInt(KEY_POLL_INTERVAL_SECONDS, BusSettings.DEFAULT_POLL_INTERVAL_SECONDS),
+        ),
     )
 
     fun save(settings: BusSettings) {
         prefs.edit()
             .putBoolean(KEY_ENABLED, settings.enabled)
             .putString(KEY_API_KEY, settings.apiKey.trim())
+            .putString(KEY_MAPS_API_KEY, settings.mapsApiKey.trim())
             .putString(KEY_STOPS, serializeStops(settings.stops))
-            .putInt(KEY_START_HOUR, settings.startHour)
-            .putInt(KEY_START_MINUTE, settings.startMinute)
-            .putInt(KEY_END_HOUR, settings.endHour)
-            .putInt(KEY_END_MINUTE, settings.endMinute)
-            .putInt(KEY_ACTIVE_DAYS, serializeActiveDays(settings.activeDays))
+            .putString(KEY_SCHEDULES, serializeSchedules(settings.schedules))
             .putInt(KEY_POLL_INTERVAL_SECONDS, settings.pollIntervalSeconds)
             .apply()
+    }
+
+    /** 예전 버전(요일/시간대 1개 고정)에서 올라온 경우 그 값을 일정 1개로 옮긴다. */
+    private fun loadSchedules(): List<AlertSchedule> {
+        val raw = prefs.getString(KEY_SCHEDULES, null)
+        if (raw != null) {
+            return parseSchedules(raw)
+        }
+        if (!prefs.contains(KEY_START_HOUR) && !prefs.contains(KEY_ACTIVE_DAYS)) {
+            return listOf(AlertSchedule(id = 1))
+        }
+        return listOf(
+            AlertSchedule(
+                id = 1,
+                days = parseActiveDays(prefs.getInt(KEY_ACTIVE_DAYS, ALL_DAYS_MASK)),
+                startHour = prefs.getInt(KEY_START_HOUR, DailySchedule.START_HOUR),
+                startMinute = prefs.getInt(KEY_START_MINUTE, DailySchedule.START_MINUTE),
+                endHour = prefs.getInt(KEY_END_HOUR, DailySchedule.END_HOUR),
+                endMinute = prefs.getInt(KEY_END_MINUTE, DailySchedule.END_MINUTE),
+            ),
+        )
+    }
+
+    /** 예전에 저장된 5/20초 같은 값은 새 선택지 중 가장 가까운 값으로 맞춘다. */
+    private fun nearestPollInterval(seconds: Int): Int =
+        BusSettings.POLL_INTERVAL_OPTIONS.minBy { abs(it - seconds) }
+
+    private fun serializeSchedules(schedules: List<AlertSchedule>): String {
+        val array = JSONArray()
+        schedules.forEach { schedule ->
+            array.put(
+                JSONObject()
+                    .put("id", schedule.id)
+                    .put("days", serializeActiveDays(schedule.days))
+                    .put("startHour", schedule.startHour)
+                    .put("startMinute", schedule.startMinute)
+                    .put("endHour", schedule.endHour)
+                    .put("endMinute", schedule.endMinute)
+                    .put("paused", schedule.paused),
+            )
+        }
+        return array.toString()
+    }
+
+    private fun parseSchedules(raw: String): List<AlertSchedule> {
+        val array = JSONArray(raw)
+        return buildList {
+            for (i in 0 until array.length()) {
+                val obj = array.getJSONObject(i)
+                add(
+                    AlertSchedule(
+                        id = obj.getLong("id"),
+                        days = parseActiveDays(obj.getInt("days")),
+                        startHour = obj.getInt("startHour"),
+                        startMinute = obj.getInt("startMinute"),
+                        endHour = obj.getInt("endHour"),
+                        endMinute = obj.getInt("endMinute"),
+                        paused = obj.optBoolean("paused", false),
+                    ),
+                )
+            }
+        }
     }
 
     private fun serializeStops(stops: List<MonitoredStop>): String {
@@ -116,7 +189,11 @@ class BusSettingsStore(context: Context) {
         private const val PREFS_NAME = "bus_settings"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_API_KEY = "api_key"
+        private const val KEY_MAPS_API_KEY = "maps_api_key"
         private const val KEY_STOPS = "stops"
+        private const val KEY_SCHEDULES = "schedules"
+
+        // 일정이 1개로 고정이던 시절의 키. loadSchedules()가 마이그레이션용으로만 읽는다.
         private const val KEY_START_HOUR = "start_hour"
         private const val KEY_START_MINUTE = "start_minute"
         private const val KEY_END_HOUR = "end_hour"

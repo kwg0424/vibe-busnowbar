@@ -25,9 +25,6 @@ object Notifications {
     private const val CHANNEL_ID = "bus_arrival"
     const val NOTIFICATION_ID = 2001
 
-    /** 07:00~07:10 을 30초 간격으로 조회할 때의 최대 틱 수. 진행률 바의 총 길이로 쓴다. */
-    const val SESSION_TICKS = 20
-
     fun ensureChannel(context: Context) {
         val manager = context.getSystemService(NotificationManager::class.java) ?: return
         val channel = NotificationChannel(
@@ -41,10 +38,14 @@ object Notifications {
         manager.createNotificationChannel(channel)
     }
 
-    fun progress(context: Context, tick: Int, arrivalText: String?): Notification {
+    /**
+     * 진행 바는 "다음 갱신까지" 시간을 나타낸다 — 갱신 주기([intervalSeconds])만큼이 전체 길이이고
+     * 조회 직후 0에서 시작해 [elapsedSeconds]만큼 차오르다가, 꽉 차면 다시 조회한다.
+     */
+    fun progress(context: Context, elapsedSeconds: Int, intervalSeconds: Int, arrivalText: String?): Notification {
         val style = Notification.ProgressStyle()
-            .addProgressSegment(Notification.ProgressStyle.Segment(SESSION_TICKS))
-            .setProgress(tick.coerceIn(0, SESSION_TICKS))
+            .addProgressSegment(Notification.ProgressStyle.Segment(intervalSeconds))
+            .setProgress(elapsedSeconds.coerceIn(0, intervalSeconds))
 
         val builder = Notification.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_bus)

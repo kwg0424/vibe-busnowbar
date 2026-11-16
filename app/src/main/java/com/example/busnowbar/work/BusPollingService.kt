@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 import java.time.ZonedDateTime
 
 /**
- * 설정에서 고른 시간대(기본 07:00~07:10) 동안 30초 간격으로 버스 도착정보를 조회해
+ * 설정의 알림 일정(기본 07:00~07:10) 시간대 동안 설정한 주기(10/15/30초)로 버스 도착정보를 조회해
  * 같은 알림(ID 고정)을 갱신한다. 다음 날 알람은 서비스가 시작되는 즉시 다시 예약한다 —
  * 폴링이 끝나기 전에 프로세스가 죽어도 다음 날 실행이 끊기지 않게 하기 위함.
  */
@@ -40,7 +40,7 @@ class BusPollingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(
             Notifications.NOTIFICATION_ID,
-            Notifications.progress(this, tick = 0, arrivalText = null),
+            Notifications.progress(this, elapsedSeconds = 0, intervalSeconds = 1, arrivalText = null),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
         )
 
@@ -71,11 +71,6 @@ class BusPollingService : Service() {
                     stopSelfSafely()
                     return@launch
                 }
-                if (ZonedDateTime.now().dayOfWeek !in settings.activeDays) {
-                    Log.i(TAG, "오늘은 선택된 요일이 아니라 폴링을 시작하지 않습니다")
-                    stopSelfSafely()
-                    return@launch
-                }
             }
 
             val now = System.currentTimeMillis()
@@ -83,44 +78,58 @@ class BusPollingService : Service() {
                 now + SESSION_DURATION_MS
             }
             else {
-                DailySchedule.todayAt(ZonedDateTime.now(), settings.endHour, settings.endMinute)
-                    .toInstant()
-                    .toEpochMilli()
+                // 지금 진행 중인 일정(오늘 요일 + 시간창 + 일시정지 아님)이 없으면 돌지 않는다.
+                DailySchedule.runningWindowEnd(ZonedDateTime.now(), settings.schedules)
+                    ?.toInstant()
+                    ?.toEpochMilli()
             }
 
-            if (endAt <= now) {
-                Log.i(TAG, "이미 종료 시각을 지나 폴링을 시작하지 않습니다")
+            if (endAt == null || endAt <= now) {
+                Log.i(TAG, "지금 진행 중인 알림 일정이 없어 폴링을 시작하지 않습니다")
                 stopSelfSafely()
                 return@launch
             }
 
-            var tick = 0
+            val intervalSeconds = settings.pollIntervalSeconds
             var nextTickAt = System.currentTimeMillis()
+            var arrivalText: String
 
             while (isActive) {
+                val cycleStartAt = nextTickAt
                 try {
                     val arrivalList = coroutineScope {
                         settings.stops.map { stop -> async { BusApi.getArrival(settings.apiKey, stop) } }.awaitAll()
                     }
-                    notify(Notifications.progress(this@BusPollingService, tick, formatArrivalText(arrivalList)))
+                    arrivalText = formatArrivalText(arrivalList)
                 }
                 catch (e: CancellationException) {
                     throw e
                 }
                 catch (e: Exception) {
                     Log.e(TAG, "버스 도착정보 조회 실패", e)
-                    notify(Notifications.error(this@BusPollingService, "도착정보를 불러오지 못했습니다"))
+                    arrivalText = "도착정보를 불러오지 못했습니다"
                 }
+                notify(
+                    Notifications.progress(this@BusPollingService, 0, intervalSeconds, arrivalText),
+                    diagnose = true,
+                )
 
-                tick++
-                nextTickAt += settings.pollIntervalSeconds * 1000L
+                nextTickAt = cycleStartAt + intervalSeconds * 1000L
                 if (nextTickAt > endAt) {
                     break
                 }
 
-                val delayMs = nextTickAt - System.currentTimeMillis()
-                if (delayMs > 0) {
-                    delay(delayMs)
+                // 다음 조회 시각까지 5초마다 진행 바만 갱신한다(도착정보 텍스트는 그대로).
+                while (isActive) {
+                    val remainingMs = nextTickAt - System.currentTimeMillis()
+                    if (remainingMs <= 0) {
+                        break
+                    }
+                    delay(minOf(PROGRESS_STEP_MS, remainingMs))
+                    val elapsedSeconds = ((System.currentTimeMillis() - cycleStartAt) / 1000L).toInt()
+                    if (elapsedSeconds < intervalSeconds) {
+                        notify(Notifications.progress(this@BusPollingService, elapsedSeconds, intervalSeconds, arrivalText))
+                    }
                 }
             }
 
@@ -128,10 +137,12 @@ class BusPollingService : Service() {
         }
     }
 
-    private fun notify(notification: Notification) {
+    private fun notify(notification: Notification, diagnose: Boolean = false) {
         val manager = getSystemService(NotificationManager::class.java) ?: return
         manager.notify(Notifications.NOTIFICATION_ID, notification)
-        logPromotionDiagnostics(manager, notification)
+        if (diagnose) {
+            logPromotionDiagnostics(manager, notification)
+        }
     }
 
     /**
@@ -178,6 +189,7 @@ class BusPollingService : Service() {
 
     companion object {
         private const val TAG = "BusPollingService"
+        private const val PROGRESS_STEP_MS = 5_000L
         private const val SESSION_DURATION_MS = 10 * 60 * 1000L
         const val EXTRA_FORCE = "force"
     }

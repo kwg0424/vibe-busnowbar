@@ -43,7 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** 주변 정류소 검색 반경(m). Seoul Open API 가 받는 radius 의 상한은 1500m. */
+/** GPS 기반 주변 정류소 검색 반경(m). Seoul Open API 가 받는 radius 의 상한은 1500m. */
 private const val NEARBY_RADIUS_METERS = 300
 
 private data class RoutePickerState(
@@ -54,10 +54,12 @@ private data class RoutePickerState(
 
 data class HomeState(
     val apiKey: String,
+    val mapsApiKey: String,
     val enabled: Boolean,
     val isConfigured: Boolean,
     val stops: List<MonitoredStop>,
-    val timeRangeLabel: String,
+    /** 동작 중인 알림 일정 요약. 없으면 null. */
+    val scheduleSummary: String?,
     val pollIntervalSeconds: Int,
 )
 
@@ -72,6 +74,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
 
     var statusMessage by remember { mutableStateOf<String?>(null) }
+    var showMap by remember { mutableStateOf(false) }
     var locating by remember { mutableStateOf(false) }
     var stationCandidates by remember { mutableStateOf<List<NearbyStation>?>(null) }
     var routePicker by remember { mutableStateOf<RoutePickerState?>(null) }
@@ -96,7 +99,7 @@ fun HomeScreen(
         }
     }
 
-    fun findNearbyStation() {
+    fun findNearbyStationByGps() {
         scope.launch {
             statusMessage = null
             locating = true
@@ -106,7 +109,7 @@ fun HomeScreen(
                     BusApi.findNearbyStations(state.apiKey, lat, lng, NEARBY_RADIUS_METERS)
                 }
                 if (stations.isEmpty()) {
-                    statusMessage = "주변 300m 안에 정류소가 없습니다"
+                    statusMessage = "주변 ${NEARBY_RADIUS_METERS}m 안에 정류소가 없습니다"
                 }
                 else {
                     stationCandidates = stations
@@ -125,24 +128,33 @@ fun HomeScreen(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { granted ->
         if (granted.values.any { it }) {
-            findNearbyStation()
+            findNearbyStationByGps()
         }
         else {
             statusMessage = "위치 권한이 필요합니다"
         }
     }
 
-    fun onFindStationClick() {
+    fun onFindStationByGpsClick() {
         if (state.apiKey.isBlank()) {
             statusMessage = "먼저 설정에서 API 키를 입력해주세요"
             return
         }
         if (Permissions.hasLocationAccess(context)) {
-            findNearbyStation()
+            findNearbyStationByGps()
         }
         else {
             requestLocationPermission.launch(Permissions.locationPermissions())
         }
+    }
+
+    fun onFindStationByMapClick() {
+        if (state.apiKey.isBlank()) {
+            statusMessage = "먼저 설정에서 API 키를 입력해주세요"
+            return
+        }
+        statusMessage = null
+        showMap = true
     }
 
     Scaffold(
@@ -176,8 +188,11 @@ fun HomeScreen(
         ) {
             SectionCard {
                 Text(
-                    if (state.enabled) {
-                        "매일 ${state.timeRangeLabel}, ${state.pollIntervalSeconds}초 간격으로 아래 정류소들의 도착정보를 알림으로 갱신합니다."
+                    if (state.enabled && state.scheduleSummary != null) {
+                        "${state.scheduleSummary}, ${state.pollIntervalSeconds}초 간격으로 아래 정류소들의 도착정보를 알림으로 갱신합니다."
+                    }
+                    else if (state.enabled) {
+                        "동작 중인 알림 일정이 없습니다. 설정에서 일정을 추가하거나 일시정지를 풀어주세요."
                     }
                     else {
                         "전체 기능이 꺼져 있습니다. 설정에서 켜야 자동으로 갱신됩니다."
@@ -195,10 +210,26 @@ fun HomeScreen(
                     color = TextMuted,
                 )
                 Button(
-                    onClick = { onFindStationClick() },
+                    onClick = { onFindStationByGpsClick() },
                     enabled = !locating,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(if (locating) "위치 확인 중…" else "내 정류소 찾기 (GPS)") }
+
+                if (state.apiKey.isBlank()) {
+                    Text(
+                        "먼저 설정에서 서울시 버스 API 키를 입력해주세요",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Amber,
+                    )
+                }
+
+                // 지도는 구글 지도 API 키 없이는 못 여니, API 키를 넣기 전까지는 숨겨둔다.
+                if (state.apiKey.isNotBlank()) {
+                    Button(
+                        onClick = { onFindStationByMapClick() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("내 정류소 찾기 (지도)") }
+                }
 
                 statusMessage?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = Amber)
@@ -261,6 +292,18 @@ fun HomeScreen(
             confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { stationCandidates = null }) { Text("취소") }
+            },
+        )
+    }
+
+    if (showMap) {
+        StationMapDialog(
+            apiKey = state.apiKey,
+            mapsApiKey = state.mapsApiKey,
+            onDismiss = { showMap = false },
+            onStationSelected = { station ->
+                showMap = false
+                findRoutes(station)
             },
         )
     }

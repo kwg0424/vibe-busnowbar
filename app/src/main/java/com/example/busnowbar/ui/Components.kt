@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import java.time.DayOfWeek
 
 @Composable
 fun SectionCard(
@@ -95,6 +96,7 @@ fun DayChip(
     enabled: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    day: DayOfWeek? = null,
 ) {
     Surface(
         modifier = modifier
@@ -110,7 +112,12 @@ fun DayChip(
             Text(
                 label,
                 style = MaterialTheme.typography.bodySmall,
-                color = if (selected) Ink else TextMuted,
+                color = when {
+                    selected -> Ink
+                    day == DayOfWeek.SUNDAY -> SundayRed
+                    day == DayOfWeek.SATURDAY -> SaturdayBlue
+                    else -> TextMuted
+                },
             )
         }
     }
@@ -128,4 +135,35 @@ fun LabeledRow(title: String, subtitle: String, trailing: @Composable () -> Unit
         }
         trailing()
     }
+}
+
+/** 요일 칩 표시 순서 — 일월화수목금토. */
+val DAY_ORDER = listOf(
+    DayOfWeek.SUNDAY, DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY,
+    DayOfWeek.THURSDAY, DayOfWeek.FRIDAY, DayOfWeek.SATURDAY,
+)
+
+fun dayLabel(day: DayOfWeek): String = when (day) {
+    DayOfWeek.SUNDAY -> "일"
+    DayOfWeek.MONDAY -> "월"
+    DayOfWeek.TUESDAY -> "화"
+    DayOfWeek.WEDNESDAY -> "수"
+    DayOfWeek.THURSDAY -> "목"
+    DayOfWeek.FRIDAY -> "금"
+    DayOfWeek.SATURDAY -> "토"
+}
+
+fun formatTime(hour: Int, minute: Int): String = "%02d:%02d".format(hour, minute)
+
+private val WEEKDAYS = setOf(
+    DayOfWeek.MONDAY, DayOfWeek.TUESDAY, DayOfWeek.WEDNESDAY, DayOfWeek.THURSDAY, DayOfWeek.FRIDAY,
+)
+private val WEEKEND = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
+
+/** 요일 집합을 요약한다 — 매일/평일/주말로 묶이면 그 이름을, 아니면 선택된 요일을 그대로 나열한다. */
+fun daysSummaryLabel(days: Set<DayOfWeek>): String = when (days) {
+    DayOfWeek.entries.toSet() -> "매일"
+    WEEKDAYS -> "평일"
+    WEEKEND -> "주말"
+    else -> DAY_ORDER.filter { it in days }.joinToString("") { dayLabel(it) }
 }

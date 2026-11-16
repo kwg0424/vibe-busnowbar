@@ -26,6 +26,8 @@ import com.example.busnowbar.ui.HomeScreen
 import com.example.busnowbar.ui.HomeState
 import com.example.busnowbar.ui.PermissionState
 import com.example.busnowbar.ui.SettingsScreen
+import com.example.busnowbar.ui.daysSummaryLabel
+import com.example.busnowbar.ui.formatTime
 import com.example.busnowbar.util.Permissions
 import com.example.busnowbar.work.BusAlarmScheduler
 import com.example.busnowbar.work.BusPollingService
@@ -78,15 +80,17 @@ private fun BusNowBarRoot() {
         Screen.Home -> HomeScreen(
             state = HomeState(
                 apiKey = settings.apiKey,
+                mapsApiKey = settings.mapsApiKey,
                 enabled = settings.enabled,
                 isConfigured = settings.isConfigured,
                 stops = settings.stops,
-                timeRangeLabel = "%02d:%02d~%02d:%02d".format(
-                    settings.startHour,
-                    settings.startMinute,
-                    settings.endHour,
-                    settings.endMinute,
-                ),
+                scheduleSummary = settings.schedules
+                    .filter { it.isActive }
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(" / ") { schedule ->
+                        val days = daysSummaryLabel(schedule.days)
+                        "$days ${formatTime(schedule.startHour, schedule.startMinute)}~${formatTime(schedule.endHour, schedule.endMinute)}"
+                    },
                 pollIntervalSeconds = settings.pollIntervalSeconds,
             ),
             onOpenSettings = { screen = Screen.Settings },
@@ -124,7 +128,7 @@ private fun BusNowBarRoot() {
             onSave = { updated ->
                 settingsStore.save(updated)
                 settings = updated
-                // 시작 시각/요일/켜짐 여부가 바뀌었을 수 있으니 이미 걸려있던 알람을 다시 예약한다 —
+                // 일정(시작 시각/요일/일시정지)이나 켜짐 여부가 바뀌었을 수 있으니 이미 걸려있던 알람을 다시 예약한다 —
                 // 이걸 안 하면 저장해도 예전 설정 그대로 알람이 울리거나(또는 안 꺼진다).
                 BusAlarmScheduler.scheduleNextRun(context)
                 Toast.makeText(context, "저장했습니다", Toast.LENGTH_SHORT).show()

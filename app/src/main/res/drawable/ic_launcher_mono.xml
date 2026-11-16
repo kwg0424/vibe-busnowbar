@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  테마 아이콘(Android 13+)용 모노크롬 레이어.
+
+  시스템이 알파만 보고 색을 입히므로 다색 전경을 그대로 쓰면 명암이 사라져 덩어리가 된다.
+  그래서 버스 실루엣 + 유리 구멍 + 전조등만 남긴 단색 버전을 따로 둔다.
+  evenOdd 라 구멍은 바깥 윤곽 안쪽에만 둔다.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:fillType="evenOdd"
+        android:pathData="
+            M34,40 L44,34 L76,34 L76,70 L66,76 L34,76 Z
+            M38,44 h24 v14 h-24 Z
+            M68,46.5 L74,43 L74,54 L68,57.5 Z
+            M41,70.5 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z
+            M54,70.5 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z
+            M38,76 h6 v3 h-6 Z
+            M56,76 h6 v3 h-6 Z" />
+</vector>

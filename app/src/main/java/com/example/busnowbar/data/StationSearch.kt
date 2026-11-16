@@ -6,6 +6,9 @@ data class NearbyStation(
     val arsId: String,
     val name: String,
     val distanceMeters: Double,
+    /** 지도 마커용 WGS84 좌표. 응답에 없으면 0. */
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
 )
 
 /** event-hub GET /bus/routes 응답 항목. */

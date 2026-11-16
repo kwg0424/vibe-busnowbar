@@ -15,6 +15,8 @@ val Surface1 = Color(0xFF161E1B)
 val Surface2 = Color(0xFF1F2A26)
 val TextPrimary = Color(0xFFE6EDE9)
 val TextMuted = Color(0xFF93A29B)
+val SundayRed = Color(0xFFE5706B)
+val SaturdayBlue = Color(0xFF6CA6E5)
 
 private val colors = darkColorScheme(
     primary = Teal,

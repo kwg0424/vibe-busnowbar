@@ -1,5 +1,6 @@
 package com.example.busnowbar.util
 
+import com.example.busnowbar.data.AlertSchedule
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.ZonedDateTime
@@ -53,4 +54,28 @@ object DailySchedule {
      */
     fun todayAt(now: ZonedDateTime, hour: Int, minute: Int): ZonedDateTime =
         now.withHour(hour).withMinute(minute).withSecond(0).withNano(0)
+
+    /** [schedules] 중 동작 가능한 것들의 다음 시작 시각까지 남은 밀리초. 동작할 일정이 없으면 null. */
+    fun delayMillisUntilNextStart(now: ZonedDateTime, schedules: List<AlertSchedule>): Long? =
+        schedules
+            .filter { it.isActive }
+            .minOfOrNull { delayMillisUntilNext(now, it.startHour, it.startMinute, it.days) }
+
+    /**
+     * [now] 에 진행 중인 일정(오늘 요일 + 시간창 안)이 있으면 그중 가장 늦은 종료 시각, 없으면 null.
+     * 알람이 시작 시각보다 살짝 일찍 울릴 수 있어 [earlySlackSeconds] 만큼은 시작 전이어도 진행 중으로 본다.
+     */
+    fun runningWindowEnd(
+        now: ZonedDateTime,
+        schedules: List<AlertSchedule>,
+        earlySlackSeconds: Long = 60,
+    ): ZonedDateTime? =
+        schedules
+            .filter { it.isActive && now.dayOfWeek in it.days }
+            .filter {
+                val start = todayAt(now, it.startHour, it.startMinute)
+                val end = todayAt(now, it.endHour, it.endMinute)
+                !now.isBefore(start.minusSeconds(earlySlackSeconds)) && now.isBefore(end)
+            }
+            .maxOfOrNull { todayAt(now, it.endHour, it.endMinute) }
 }

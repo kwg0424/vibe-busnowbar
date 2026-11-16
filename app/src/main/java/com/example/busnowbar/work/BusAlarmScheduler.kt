@@ -9,7 +9,7 @@ import com.example.busnowbar.data.BusSettingsStore
 import com.example.busnowbar.util.DailySchedule
 import java.time.ZonedDateTime
 
-/** 설정에서 고른 시각(기본 07:00)에 [BusPollingService]를 깨우는 알람을 예약한다. */
+/** 알림 일정들 중 가장 가까운 시작 시각에 [BusPollingService]를 깨우는 알람을 예약한다. */
 object BusAlarmScheduler {
 
     private const val TAG = "BusAlarmScheduler"
@@ -20,19 +20,19 @@ object BusAlarmScheduler {
         val settings = BusSettingsStore(context).load()
         val pendingIntent = pendingIntent(context)
 
-        if (!settings.enabled || settings.activeDays.isEmpty()) {
-            Log.i(TAG, "기능이 꺼져 있거나 요일이 선택되지 않아 알람을 취소합니다")
+        val delayMillis = if (settings.enabled) {
+            DailySchedule.delayMillisUntilNextStart(ZonedDateTime.now(), settings.schedules)
+        }
+        else {
+            null
+        }
+        if (delayMillis == null) {
+            Log.i(TAG, "기능이 꺼져 있거나 동작할 일정이 없어 알람을 취소합니다")
             alarmManager.cancel(pendingIntent)
             return
         }
 
-        val triggerAt = System.currentTimeMillis() +
-            DailySchedule.delayMillisUntilNext(
-                ZonedDateTime.now(),
-                settings.startHour,
-                settings.startMinute,
-                settings.activeDays,
-            )
+        val triggerAt = System.currentTimeMillis() + delayMillis
 
         if (alarmManager.canScheduleExactAlarms()) {
             alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)

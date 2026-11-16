@@ -67,6 +67,8 @@ object BusApi {
                 arsId = item["arsId"].orEmpty(),
                 name = item["stationNm"].orEmpty(),
                 distanceMeters = item["dist"]?.toDoubleOrNull() ?: 0.0,
+                latitude = item["gpsY"]?.toDoubleOrNull() ?: 0.0,
+                longitude = item["gpsX"]?.toDoubleOrNull() ?: 0.0,
             )
         }
     }

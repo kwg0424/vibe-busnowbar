@@ -1,6 +1,8 @@
 package com.example.busnowbar.util
 
+import com.example.busnowbar.data.AlertSchedule
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.ZoneId
@@ -67,5 +69,53 @@ class DailyScheduleTest {
     @Test
     fun `activeDays가 비어있으면 요일 필터 없이 다음 시각만 돌려준다`() {
         assertEquals(2 * hourMs, DailySchedule.delayMillisUntilNext(at(5), activeDays = emptySet()))
+    }
+
+    private fun schedule(
+        id: Long,
+        startHour: Int,
+        endHour: Int,
+        paused: Boolean = false,
+        days: Set<java.time.DayOfWeek> = java.time.DayOfWeek.entries.toSet(),
+    ) = AlertSchedule(id, days, startHour, 0, endHour, 0, paused)
+
+    @Test
+    fun `여러 일정 중 가장 가까운 시작 시각을 고른다`() {
+        val schedules = listOf(schedule(1, 18, 19), schedule(2, 7, 8))
+        assertEquals(2 * hourMs, DailySchedule.delayMillisUntilNextStart(at(5), schedules))
+    }
+
+    @Test
+    fun `일시정지된 일정은 다음 시작 계산에서 빠진다`() {
+        val schedules = listOf(schedule(1, 7, 8, paused = true), schedule(2, 18, 19))
+        assertEquals(13 * hourMs, DailySchedule.delayMillisUntilNextStart(at(5), schedules))
+    }
+
+    @Test
+    fun `동작할 일정이 없으면 다음 시작은 null`() {
+        assertNull(DailySchedule.delayMillisUntilNextStart(at(5), emptyList()))
+        assertNull(DailySchedule.delayMillisUntilNextStart(at(5), listOf(schedule(1, 7, 8, paused = true))))
+        assertNull(DailySchedule.delayMillisUntilNextStart(at(5), listOf(schedule(1, 7, 8, days = emptySet()))))
+    }
+
+    @Test
+    fun `진행 중인 일정의 종료 시각을 돌려준다`() {
+        val schedules = listOf(schedule(1, 7, 8), schedule(2, 7, 9))
+        assertEquals(at(9), DailySchedule.runningWindowEnd(at(7, 30), schedules))
+    }
+
+    @Test
+    fun `시작 직전 1분 이내면 진행 중으로 본다`() {
+        val schedules = listOf(schedule(1, 7, 8))
+        assertEquals(at(8), DailySchedule.runningWindowEnd(at(6, 59).withSecond(30), schedules))
+        assertNull(DailySchedule.runningWindowEnd(at(6, 50), schedules))
+    }
+
+    @Test
+    fun `종료 시각이 지났거나 일시정지거나 요일이 아니면 진행 중이 아니다`() {
+        val now = at(7, 30)
+        assertNull(DailySchedule.runningWindowEnd(at(8), listOf(schedule(1, 7, 8))))
+        assertNull(DailySchedule.runningWindowEnd(now, listOf(schedule(1, 7, 8, paused = true))))
+        assertNull(DailySchedule.runningWindowEnd(now, listOf(schedule(1, 7, 8, days = setOf(now.plusDays(1).dayOfWeek)))))
     }
 }
