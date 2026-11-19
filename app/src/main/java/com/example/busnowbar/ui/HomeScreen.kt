@@ -223,8 +223,8 @@ fun HomeScreen(
                     )
                 }
 
-                // 지도는 구글 지도 API 키 없이는 못 여니, API 키를 넣기 전까지는 숨겨둔다.
-                if (state.apiKey.isNotBlank()) {
+                // 지도는 구글 지도 API 키 없이는 못 여니, 구글 지도 키를 넣기 전까지는 숨겨둔다.
+                if (state.mapsApiKey.isNotBlank()) {
                     Button(
                         onClick = { onFindStationByMapClick() },
                         modifier = Modifier.fillMaxWidth(),
