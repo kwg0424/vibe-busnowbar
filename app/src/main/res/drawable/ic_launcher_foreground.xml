@@ -15,7 +15,7 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 바퀴 -->
+    <!-- 바퀴(앞 2개) -->
     <path
         android:fillColor="#FF1B2A3D"
         android:pathData="M38,76 h6 v3 h-6 Z M56,76 h6 v3 h-6 Z" />
@@ -57,4 +57,9 @@
     <path
         android:fillColor="#FFF2B544"
         android:pathData="M41,70.5 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z M54,70.5 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z" />
+
+    <!-- 바퀴(옆면 원근으로 작게 보이는 뒤쪽 1개) — 옆면보다 나중에 그려야 가려지지 않는다 -->
+    <path
+        android:fillColor="#FF1B2A3D"
+        android:pathData="M70,74 h4 v3 h-4 Z" />
 </vector>
