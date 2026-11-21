@@ -16,6 +16,15 @@ val keystoreProperties = Properties().apply {
     }
 }
 
+// 서울시 버스 Open API 서비스키. local.properties 의 BUS_API_KEY=... 로 넣는다(커밋되지 않음).
+// 설정 화면에서 입력받지 않고 빌드에 구워 넣는다 — 키는 개발자 소유이고 사용자가 바꿀 일이 없다.
+val busApiKey: String = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        load(FileInputStream(file))
+    }
+}.getProperty("BUS_API_KEY", "")
+
 android {
     namespace = "com.example.busnowbar"
     compileSdk {
@@ -28,6 +37,7 @@ android {
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "BUS_API_KEY", "\"${busApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -61,6 +71,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

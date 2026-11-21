@@ -321,20 +321,38 @@ fun StationMapDialog(
 /**
  * osmdroid 전역 설정.
  *
- * OSM 타일 정책(https://operations.osmfoundation.org/policies/tiles/)은 앱을 식별할 수 있는
- * User-Agent 를 요구한다. 기본값("osmdroid")은 물론이고 패키지명(com.example.*)도
- * "설정 안 한 샘플 앱"으로 간주돼 403 Access blocked 가 돌아온다.
- * 그래서 앱 이름/버전 + 연락처(저장소 주소) 형식으로 보낸다.
+ * OSM 타일 정책(https://operations.osmfoundation.org/policies/tiles/)을 어기면
+ * 타일 대신 "Access blocked" 이미지가 내려온다(HTTP 200 이라 코드로는 구분이 안 된다).
+ * 차단 사유는 크게 둘이라 양쪽을 모두 맞춘다.
+ *
+ * 1) 앱을 식별할 수 없는 User-Agent — [applyOsmUserAgent]
+ * 2) 요청량 과다 — 아래 캐시/동시요청 설정
  */
 private fun ensureOsmConfigured(context: Context) {
     val app = context.applicationContext
-    Configuration.getInstance().load(app, app.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+    Configuration.getInstance().apply {
+        load(app, app.getSharedPreferences("osmdroid", Context.MODE_PRIVATE))
+
+        // 받아둔 타일을 오래 재사용해 같은 타일을 다시 받지 않게 한다(정책상 권장되는 캐시 사용).
+        expirationExtendedDuration = TILE_CACHE_EXTRA_LIFETIME_MS
+        // 동시 다운로드를 낮게 유지한다 — 스크롤/줌 할 때 한꺼번에 몰리는 걸 줄인다.
+        tileDownloadThreads = 2
+        tileDownloadMaxQueueSize = 8
+        // 화면 밖 타일을 미리 당겨오지 않는다.
+        cacheMapTileOvershoot = 0
+    }
     applyOsmUserAgent(app)
 }
+
+/** 캐시된 타일을 서버가 알려준 만료시각 이후에도 더 쓰는 기간(7일). */
+private const val TILE_CACHE_EXTRA_LIFETIME_MS = 7L * 24 * 60 * 60 * 1000
 
 /**
  * MapView 생성 과정에서 osmdroid 가 설정을 다시 읽어 UA 를 패키지명으로 되돌리는 경우가 있어,
  * 타일 요청이 시작되기 직전에 한 번 더 확정한다.
+ *
+ * 패키지명(com.example.*)을 그대로 쓰면 "설정 안 한 샘플 앱"으로 걸러지므로,
+ * 제품명/버전 + 연락처(저장소 주소) 형식으로 보낸다.
  */
 private fun applyOsmUserAgent(context: Context) {
     val app = context.applicationContext

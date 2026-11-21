@@ -136,7 +136,7 @@ fun HomeScreen(
 
     fun onFindStationByGpsClick() {
         if (state.apiKey.isBlank()) {
-            statusMessage = "먼저 설정에서 API 키를 입력해주세요"
+            statusMessage = "서울시 버스 API 키가 빌드에 없습니다 (local.properties 의 BUS_API_KEY)"
             return
         }
         if (Permissions.hasLocationAccess(context)) {
@@ -149,7 +149,7 @@ fun HomeScreen(
 
     fun onFindStationByMapClick() {
         if (state.apiKey.isBlank()) {
-            statusMessage = "먼저 설정에서 API 키를 입력해주세요"
+            statusMessage = "서울시 버스 API 키가 빌드에 없습니다 (local.properties 의 BUS_API_KEY)"
             return
         }
         statusMessage = null
@@ -216,7 +216,7 @@ fun HomeScreen(
 
                 if (state.apiKey.isBlank()) {
                     Text(
-                        "먼저 설정에서 서울시 버스 API 키를 입력해주세요",
+                        "서울시 버스 API 키가 빌드에 없습니다 (local.properties 의 BUS_API_KEY)",
                         style = MaterialTheme.typography.bodySmall,
                         color = Amber,
                     )

@@ -14,7 +14,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -57,8 +56,6 @@ fun SettingsScreen(
     onClose: () -> Unit,
 ) {
     var enabled by remember { mutableStateOf(initial.enabled) }
-    var apiKeyInput by remember { mutableStateOf("") }
-    var editingApiKey by remember { mutableStateOf(initial.apiKey.isBlank()) }
     var schedules by remember { mutableStateOf(initial.schedules) }
     // 시간 선택 중인 일정(id)과 시작/종료 구분. null 이면 다이얼로그가 닫힌 상태.
     var pickerTarget by remember { mutableStateOf<Pair<Long, Boolean>?>(null) }
@@ -145,23 +142,6 @@ fun SettingsScreen(
                     }
                 }
 
-                SectionCard {
-                    Text("API 키", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
-                    ApiKeyField(
-                        title = "서울시 버스",
-                        description = "data.go.kr 서울시 버스운행정보 서비스키(디코딩 키)",
-                        label = "서울시 버스 API 키",
-                        editing = editingApiKey,
-                        input = apiKeyInput,
-                        enabled = enabled,
-                        onInputChange = { apiKeyInput = it },
-                        onStartEdit = {
-                            apiKeyInput = ""
-                            editingApiKey = true
-                        },
-                    )
-                }
-
                 OutlinedButton(
                     onClick = {
                         testing = true
@@ -239,10 +219,8 @@ fun SettingsScreen(
 
             Button(
                 onClick = {
-                    val resolvedApiKey = if (editingApiKey && apiKeyInput.isNotBlank()) apiKeyInput else initial.apiKey
                     val settings = BusSettings(
                         enabled = enabled,
-                        apiKey = resolvedApiKey,
                         stops = initial.stops,
                         schedules = schedules,
                         pollIntervalSeconds = pollIntervalSeconds,
@@ -364,39 +342,6 @@ private fun ScheduleEditor(
                     enabled = enabled,
                     modifier = Modifier.weight(1f),
                 ) { Text("종료 ${formatTime(schedule.endHour, schedule.endMinute)}") }
-            }
-        }
-    }
-}
-
-/** API 키 하나의 입력 UI — 저장된 키가 있으면 "설정되어 있습니다 [변경]", 변경을 누르면 입력칸. */
-@Composable
-private fun ApiKeyField(
-    title: String,
-    description: String,
-    label: String,
-    editing: Boolean,
-    input: String,
-    enabled: Boolean,
-    onInputChange: (String) -> Unit,
-    onStartEdit: () -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(title, style = MaterialTheme.typography.titleSmall, color = TextPrimary)
-        Text(description, style = MaterialTheme.typography.bodySmall, color = TextMuted)
-        if (editing) {
-            OutlinedTextField(
-                value = input,
-                onValueChange = onInputChange,
-                label = { Text(label) },
-                singleLine = true,
-                enabled = enabled,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        else {
-            LabeledRow(title = label, subtitle = "설정되어 있습니다") {
-                TextButton(enabled = enabled, onClick = onStartEdit) { Text("변경") }
             }
         }
     }
