@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 어댑티브 아이콘 배경 레이어. 단색 대신 대각 그라데이션으로 깊이를 준다. -->
+<!--
+  어댑티브 아이콘 배경 — 좌상단에서 우하단으로 흐르는 파란 대각 그라데이션.
+  두 끝점 색은 busnowbar_icon_round_preview.png 의 대각선 픽셀을 선형 보간해 역산했다.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
@@ -15,8 +18,8 @@
                 android:startY="0"
                 android:endX="108"
                 android:endY="108">
-                <item android:offset="0" android:color="#FF3B93F0" />
-                <item android:offset="1" android:color="#FF12388F" />
+                <item android:offset="0" android:color="#FF3E96F6" />
+                <item android:offset="1" android:color="#FF173C90" />
             </gradient>
         </aapt:attr>
     </path>

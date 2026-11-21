@@ -38,8 +38,6 @@ data class BusSettings(
     /** 전체 기능 켜기/끄기. 꺼져 있으면 예약된 자동 폴링을 하지 않는다("지금 폴링 테스트"는 예외). */
     val enabled: Boolean = true,
     val apiKey: String = "",
-    /** 구글 지도 SDK 키. 비어 있으면 빌드 때 local.properties 로 넣은 키를 쓴다. */
-    val mapsApiKey: String = "",
     val stops: List<MonitoredStop> = emptyList(),
     /** 알림 일정 목록. 일정마다 요일/시간대/일시정지를 따로 가진다. */
     val schedules: List<AlertSchedule> = listOf(AlertSchedule(id = 1)),
@@ -62,7 +60,6 @@ class BusSettingsStore(context: Context) {
     fun load(): BusSettings = BusSettings(
         enabled = prefs.getBoolean(KEY_ENABLED, true),
         apiKey = prefs.getString(KEY_API_KEY, "").orEmpty(),
-        mapsApiKey = prefs.getString(KEY_MAPS_API_KEY, "").orEmpty(),
         stops = parseStops(prefs.getString(KEY_STOPS, null)),
         schedules = loadSchedules(),
         pollIntervalSeconds = nearestPollInterval(
@@ -74,7 +71,6 @@ class BusSettingsStore(context: Context) {
         prefs.edit()
             .putBoolean(KEY_ENABLED, settings.enabled)
             .putString(KEY_API_KEY, settings.apiKey.trim())
-            .putString(KEY_MAPS_API_KEY, settings.mapsApiKey.trim())
             .putString(KEY_STOPS, serializeStops(settings.stops))
             .putString(KEY_SCHEDULES, serializeSchedules(settings.schedules))
             .putInt(KEY_POLL_INTERVAL_SECONDS, settings.pollIntervalSeconds)
@@ -189,7 +185,6 @@ class BusSettingsStore(context: Context) {
         private const val PREFS_NAME = "bus_settings"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_API_KEY = "api_key"
-        private const val KEY_MAPS_API_KEY = "maps_api_key"
         private const val KEY_STOPS = "stops"
         private const val KEY_SCHEDULES = "schedules"
 

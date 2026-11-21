@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  BusNowBar 로고 — 정면 버스에 옆면을 살짝 보여주는 3/4 아이소메트릭 형태.
+  BusNowBar 로고 — 정면을 보면서 오른쪽 옆면이 살짝 보이는 3/4 아이소메트릭 버스.
 
-  면마다 명암이 필요해 다색으로 그린다.
-  테마 아이콘(모노크롬)은 색이 무시되므로 ic_launcher_mono.xml 로 따로 둔다.
+  모든 좌표·색은 busnowbar_icon_round_preview.png(1024px)를 픽셀 스캔해 뽑았다.
+  이미지 1024px 가 뷰포트 108 에 대응하므로 환산 계수는 9.4815 px/dp.
 
-  좌표계: 앞면 (34,40)-(66,76), 깊이 벡터 (+10,-6) 만큼 밀어 윗면·옆면을 만든다.
-  어댑티브 아이콘은 중앙 지름 66dp 만 안전하다 —
-  모든 꼭짓점을 중심 (54,54) 반경 33 안에 넣어 어떤 마스크에서도 잘리지 않는다.
+  깊이 벡터는 (+10,-6) — 옆면/지붕/옆띠/뒷바퀴의 기울기가 모두 이 비율(-0.6)을 따른다.
+  뒷바퀴가 직사각형이 아니라 평행사변형인 이유도 이 기울기 때문이다.
+
+  색이 무시되는 테마 아이콘(모노크롬)은 ic_launcher_mono.xml 로 따로 둔다.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -15,51 +16,52 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- 바퀴(앞 2개) -->
+    <!-- 앞바퀴 2개 (차체 아래로 빠져나온 부분만 보인다) -->
     <path
-        android:fillColor="#FF1B2A3D"
+        android:fillColor="#FF1D2A3C"
         android:pathData="M38,76 h6 v3 h-6 Z M56,76 h6 v3 h-6 Z" />
 
-    <!-- 앞면 (밝은 면) -->
+    <!-- 뒷바퀴 — 옆면 아래라 원근 때문에 기울어진 평행사변형으로 보인다 -->
     <path
-        android:fillColor="#FFEDF2F0"
+        android:fillColor="#FF1D2A3C"
+        android:pathData="M69.5,73.9 L72.9,71.8 L72.9,74.9 L69.5,77 Z" />
+
+    <!-- 앞면 -->
+    <path
+        android:fillColor="#FFECF0EF"
         android:pathData="M34,40 L66,40 L66,76 L34,76 Z" />
 
     <!-- 옆면 (그늘진 면) -->
     <path
-        android:fillColor="#FFC9D6E6"
+        android:fillColor="#FFC9D6E5"
         android:pathData="M66,40 L76,34 L76,70 L66,76 Z" />
 
-    <!-- 지붕 (윗면) -->
+    <!-- 지붕 -->
     <path
         android:fillColor="#FFFFFFFF"
         android:pathData="M34,40 L66,40 L76,34 L44,34 Z" />
 
     <!-- 앞유리 -->
     <path
-        android:fillColor="#FF1B2A3D"
+        android:fillColor="#FF1D2A3C"
         android:pathData="M38,44 h24 v14 h-24 Z" />
 
     <!-- 옆유리 -->
     <path
-        android:fillColor="#FF1B2A3D"
-        android:pathData="M68,46.5 L74,43 L74,54 L68,57.5 Z" />
+        android:fillColor="#FF1D2A3C"
+        android:pathData="M68.25,46.45 L74,43 L74,53.9 L68.25,57.35 Z" />
 
-    <!-- 노선 띠 -->
+    <!-- 노선 띠 (앞면 / 옆면은 한 톤 어둡게) -->
     <path
-        android:fillColor="#FFF2B544"
+        android:fillColor="#FFF2B342"
         android:pathData="M34,62 h32 v4 h-32 Z" />
     <path
-        android:fillColor="#FFE0A235"
+        android:fillColor="#FFE0A337"
         android:pathData="M66,62 L76,56 L76,60 L66,66 Z" />
 
     <!-- 전조등 -->
     <path
-        android:fillColor="#FFF2B544"
-        android:pathData="M41,70.5 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z M54,70.5 a2.5,2.5 0 1,0 5,0 a2.5,2.5 0 1,0 -5,0 Z" />
-
-    <!-- 바퀴(옆면 원근으로 작게 보이는 뒤쪽 1개) — 옆면보다 나중에 그려야 가려지지 않는다 -->
-    <path
-        android:fillColor="#FF1B2A3D"
-        android:pathData="M70,74 h4 v3 h-4 Z" />
+        android:fillColor="#FFF2B342"
+        android:pathData="M41.15,70.5 a2.3,2.3 0 1,0 4.6,0 a2.3,2.3 0 1,0 -4.6,0 Z
+                          M54.25,70.5 a2.3,2.3 0 1,0 4.6,0 a2.3,2.3 0 1,0 -4.6,0 Z" />
 </vector>

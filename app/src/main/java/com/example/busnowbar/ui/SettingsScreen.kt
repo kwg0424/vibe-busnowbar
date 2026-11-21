@@ -59,8 +59,6 @@ fun SettingsScreen(
     var enabled by remember { mutableStateOf(initial.enabled) }
     var apiKeyInput by remember { mutableStateOf("") }
     var editingApiKey by remember { mutableStateOf(initial.apiKey.isBlank()) }
-    var mapsApiKeyInput by remember { mutableStateOf("") }
-    var editingMapsApiKey by remember { mutableStateOf(initial.mapsApiKey.isBlank()) }
     var schedules by remember { mutableStateOf(initial.schedules) }
     // 시간 선택 중인 일정(id)과 시작/종료 구분. null 이면 다이얼로그가 닫힌 상태.
     var pickerTarget by remember { mutableStateOf<Pair<Long, Boolean>?>(null) }
@@ -162,20 +160,6 @@ fun SettingsScreen(
                             editingApiKey = true
                         },
                     )
-                    HorizontalDivider(color = Surface2)
-                    ApiKeyField(
-                        title = "구글 지도",
-                        description = "Maps SDK for Android 키",
-                        label = "구글 지도 API 키",
-                        editing = editingMapsApiKey,
-                        input = mapsApiKeyInput,
-                        enabled = enabled,
-                        onInputChange = { mapsApiKeyInput = it },
-                        onStartEdit = {
-                            mapsApiKeyInput = ""
-                            editingMapsApiKey = true
-                        },
-                    )
                 }
 
                 OutlinedButton(
@@ -256,12 +240,9 @@ fun SettingsScreen(
             Button(
                 onClick = {
                     val resolvedApiKey = if (editingApiKey && apiKeyInput.isNotBlank()) apiKeyInput else initial.apiKey
-                    val resolvedMapsApiKey =
-                        if (editingMapsApiKey && mapsApiKeyInput.isNotBlank()) mapsApiKeyInput else initial.mapsApiKey
                     val settings = BusSettings(
                         enabled = enabled,
                         apiKey = resolvedApiKey,
-                        mapsApiKey = resolvedMapsApiKey,
                         stops = initial.stops,
                         schedules = schedules,
                         pollIntervalSeconds = pollIntervalSeconds,

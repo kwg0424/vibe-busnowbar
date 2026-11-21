@@ -80,7 +80,6 @@ private fun BusNowBarRoot() {
         Screen.Home -> HomeScreen(
             state = HomeState(
                 apiKey = settings.apiKey,
-                mapsApiKey = settings.mapsApiKey,
                 enabled = settings.enabled,
                 isConfigured = settings.isConfigured,
                 stops = settings.stops,

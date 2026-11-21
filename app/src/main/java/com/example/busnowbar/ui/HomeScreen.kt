@@ -54,7 +54,6 @@ private data class RoutePickerState(
 
 data class HomeState(
     val apiKey: String,
-    val mapsApiKey: String,
     val enabled: Boolean,
     val isConfigured: Boolean,
     val stops: List<MonitoredStop>,
@@ -223,13 +222,11 @@ fun HomeScreen(
                     )
                 }
 
-                // 지도는 구글 지도 API 키 없이는 못 여니, 구글 지도 키를 넣기 전까지는 숨겨둔다.
-                if (state.mapsApiKey.isNotBlank()) {
-                    Button(
-                        onClick = { onFindStationByMapClick() },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text("내 정류소 찾기 (지도)") }
-                }
+                // OpenStreetMap 은 API 키가 필요 없어서 항상 쓸 수 있다.
+                Button(
+                    onClick = { onFindStationByMapClick() },
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("내 정류소 찾기 (지도)") }
 
                 statusMessage?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = Amber)
@@ -299,7 +296,6 @@ fun HomeScreen(
     if (showMap) {
         StationMapDialog(
             apiKey = state.apiKey,
-            mapsApiKey = state.mapsApiKey,
             onDismiss = { showMap = false },
             onStationSelected = { station ->
                 showMap = false
