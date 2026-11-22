@@ -32,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -56,7 +57,7 @@ import org.osmdroid.events.DelayedMapListener
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
@@ -71,7 +72,8 @@ private const val MAX_STATIONS = 5
 /** 위치를 못 구했을 때 지도를 처음 여는 곳(서울시청). */
 private const val DEFAULT_LAT = 37.5665
 private const val DEFAULT_LNG = 126.9780
-private const val DEFAULT_ZOOM = 16.0
+/** 처음 열었을 때 줌 — 기존 16.0 의 1.5배 축척(log2(1.5) ≈ 0.585 레벨 추가). */
+private const val DEFAULT_ZOOM = 16.585
 
 /** 지도를 움직이다 멈춘 걸로 보고 재검색하기까지 기다리는 시간(ms). */
 private const val MAP_SETTLE_MS = 400L
@@ -90,6 +92,7 @@ private const val OSM_COPYRIGHT_URL = "https://www.openstreetmap.org/copyright"
 @Composable
 fun StationMapDialog(
     apiKey: String,
+    cartoApiKey: String,
     onDismiss: () -> Unit,
     onStationSelected: (NearbyStation) -> Unit,
 ) {
@@ -202,18 +205,32 @@ fun StationMapDialog(
                     TextButton(onClick = onDismiss) { Text("닫기") }
                 }
 
-                Box(modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.weight(1f).fillMaxWidth().clipToBounds()) {
                     AndroidView(
                         modifier = Modifier.fillMaxSize(),
                         factory = { ctx ->
                             // MapView 를 만들기 전에 끝내야 한다 — 첫 타일 요청이 바로 나가기 때문.
                             ensureOsmConfigured(ctx)
                             MapView(ctx).apply {
-                                setTileSource(TileSourceFactory.MAPNIK)
+                                setTileSource(osmTileSource(cartoApiKey))
                                 setMultiTouchControls(true)
                                 zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
                                 controller.setZoom(DEFAULT_ZOOM)
                                 controller.setCenter(GeoPoint(DEFAULT_LAT, DEFAULT_LNG))
+                                // 뷰 크기가 아직 0(가로/세로 미확정)일 때 setZoom 은 조용히 무시된다.
+                                // post{} 로는 타이밍이 보장 안 돼서, 실제로 크기가 잡히는
+                                // 첫 레이아웃 통과 시점을 기다렸다가 한 번 더 확정한다.
+                                viewTreeObserver.addOnGlobalLayoutListener(
+                                    object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+                                        override fun onGlobalLayout() {
+                                            if (width > 0 && height > 0) {
+                                                controller.setZoom(DEFAULT_ZOOM)
+                                                controller.setCenter(GeoPoint(DEFAULT_LAT, DEFAULT_LNG))
+                                                viewTreeObserver.removeOnGlobalLayoutListener(this)
+                                            }
+                                        }
+                                    },
+                                )
                                 // 손을 떼고 잠깐 멈췄을 때만 검색한다 — 드래그 중엔 호출이 쏟아진다.
                                 addMapListener(
                                     DelayedMapListener(
@@ -246,8 +263,14 @@ fun StationMapDialog(
                                         Marker(map).apply {
                                             position = GeoPoint(station.latitude, station.longitude)
                                             setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-                                            title = station.name
-                                            snippet = "${station.distanceMeters.toInt()}m"
+                                            // osmdroid 마커들은 기본 말풍선(InfoWindow)을 지도당 하나만 공유해서
+                                            // showInfoWindow() 를 여러 개 동시에 띄울 수 없다 — 대신 마커 자체를
+                                            // 이름·ID 글자 라벨로 그려서(setTextIcon) 항상 다 보이게 한다.
+                                            setTextIcon("${station.name} · ${station.arsId}")
+                                            setOnMarkerClickListener { _, _ ->
+                                                onStationSelected(station)
+                                                true
+                                            }
                                         },
                                     )
                                 }
@@ -317,6 +340,28 @@ fun StationMapDialog(
         }
     }
 }
+
+/**
+ * `tile.openstreetmap.org`(osm.org 메인 서버, [TileSourceFactory.MAPNIK])는 정책상
+ * 가벼운 테스트·소규모 트래픽만 허용한다 — 배포 앱이 쓰면 UA/캐시를 다 맞춰도
+ * 결국 403 Forbidden 으로 막힌다("Access blocked" 플레이스홀더조차 안 내려주고 하드 차단).
+ *
+ * CARTO는 OSM 데이터를 쓰는 별도 CDN으로, API 키 없이 앱에서 상시 사용해도 되는 타일을
+ * 제공한다(switch2osm 권장 대체 서버). 저작자 표시는 여전히 "© OpenStreetMap" 필수.
+ */
+private fun osmTileSource(cartoApiKey: String) = XYTileSource(
+    "CartoVoyager",
+    0,
+    19,
+    256,
+    if (cartoApiKey.isBlank()) ".png" else ".png?key=$cartoApiKey",
+    arrayOf(
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/",
+    ),
+)
 
 /**
  * osmdroid 전역 설정.

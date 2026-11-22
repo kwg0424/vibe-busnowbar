@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
@@ -56,6 +57,8 @@ fun SettingsScreen(
     onClose: () -> Unit,
 ) {
     var enabled by remember { mutableStateOf(initial.enabled) }
+    var apiKey by remember { mutableStateOf(initial.apiKey) }
+    var cartoApiKey by remember { mutableStateOf(initial.cartoApiKey) }
     var schedules by remember { mutableStateOf(initial.schedules) }
     // 시간 선택 중인 일정(id)과 시작/종료 구분. null 이면 다이얼로그가 닫힌 상태.
     var pickerTarget by remember { mutableStateOf<Pair<Long, Boolean>?>(null) }
@@ -110,6 +113,13 @@ fun SettingsScreen(
                 modifier = Modifier.alpha(if (enabled) 1f else 0.4f),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                SectionCard {
+                    Text("API", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
+                    ApiKeyRow(label = "서울 버스 API", value = apiKey, enabled = enabled, onValueChange = { apiKey = it })
+                    HorizontalDivider(color = Surface2)
+                    ApiKeyRow(label = "CARTO API", value = cartoApiKey, enabled = enabled, onValueChange = { cartoApiKey = it })
+                }
+
                 SectionCard {
                     val allGranted = permissionState.notificationGranted &&
                         permissionState.exactAlarmGranted &&
@@ -221,6 +231,8 @@ fun SettingsScreen(
                 onClick = {
                     val settings = BusSettings(
                         enabled = enabled,
+                        apiKey = apiKey,
+                        cartoApiKey = cartoApiKey,
                         stops = initial.stops,
                         schedules = schedules,
                         pollIntervalSeconds = pollIntervalSeconds,
@@ -342,6 +354,41 @@ private fun ScheduleEditor(
                     enabled = enabled,
                     modifier = Modifier.weight(1f),
                 ) { Text("종료 ${formatTime(schedule.endHour, schedule.endMinute)}") }
+            }
+        }
+    }
+}
+
+/** 키가 있으면 끝 4자리만 보여주고 "변경"을 눌러야 입력칸이 뜬다. 비어 있으면 바로 입력칸을 보여준다. */
+@Composable
+private fun ApiKeyRow(label: String, value: String, enabled: Boolean, onValueChange: (String) -> Unit) {
+    var editing by remember(label) { mutableStateOf(value.isBlank()) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (editing) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = onValueChange,
+                    label = { Text(label) },
+                    enabled = enabled,
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                if (value.isNotBlank()) {
+                    TextButton(onClick = { editing = false }, enabled = enabled) { Text("완료") }
+                }
+            }
+        }
+        else {
+            LabeledRow(
+                title = label,
+                subtitle = "*".repeat(4) + value.takeLast(4),
+            ) {
+                TextButton(onClick = { editing = true }, enabled = enabled) { Text("변경") }
             }
         }
     }

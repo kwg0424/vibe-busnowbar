@@ -25,6 +25,14 @@ val busApiKey: String = Properties().apply {
     }
 }.getProperty("BUS_API_KEY", "")
 
+// CARTO 베이스맵 API 키. local.properties 의 CARTO_API_KEY=... 로 넣는다(커밋되지 않음).
+val cartoApiKey: String = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) {
+        load(FileInputStream(file))
+    }
+}.getProperty("CARTO_API_KEY", "")
+
 android {
     namespace = "com.example.busnowbar"
     compileSdk {
@@ -38,6 +46,7 @@ android {
         versionCode = 1
         versionName = "1.0"
         buildConfigField("String", "BUS_API_KEY", "\"${busApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "CARTO_API_KEY", "\"${cartoApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

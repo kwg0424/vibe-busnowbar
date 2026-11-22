@@ -54,6 +54,7 @@ private data class RoutePickerState(
 
 data class HomeState(
     val apiKey: String,
+    val cartoApiKey: String,
     val enabled: Boolean,
     val isConfigured: Boolean,
     val stops: List<MonitoredStop>,
@@ -136,7 +137,7 @@ fun HomeScreen(
 
     fun onFindStationByGpsClick() {
         if (state.apiKey.isBlank()) {
-            statusMessage = "서울시 버스 API 키가 빌드에 없습니다 (local.properties 의 BUS_API_KEY)"
+            statusMessage = "설정 > API 에서 서울 버스 API 키를 먼저 입력하세요"
             return
         }
         if (Permissions.hasLocationAccess(context)) {
@@ -149,7 +150,7 @@ fun HomeScreen(
 
     fun onFindStationByMapClick() {
         if (state.apiKey.isBlank()) {
-            statusMessage = "서울시 버스 API 키가 빌드에 없습니다 (local.properties 의 BUS_API_KEY)"
+            statusMessage = "설정 > API 에서 서울 버스 API 키를 먼저 입력하세요"
             return
         }
         statusMessage = null
@@ -216,7 +217,7 @@ fun HomeScreen(
 
                 if (state.apiKey.isBlank()) {
                     Text(
-                        "서울시 버스 API 키가 빌드에 없습니다 (local.properties 의 BUS_API_KEY)",
+                        "설정 > API 에서 서울 버스 API 키를 먼저 입력하세요",
                         style = MaterialTheme.typography.bodySmall,
                         color = Amber,
                     )
@@ -296,6 +297,7 @@ fun HomeScreen(
     if (showMap) {
         StationMapDialog(
             apiKey = state.apiKey,
+            cartoApiKey = state.cartoApiKey,
             onDismiss = { showMap = false },
             onStationSelected = { station ->
                 showMap = false

@@ -2,6 +2,7 @@ package com.example.busnowbar
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -39,6 +40,9 @@ class MainActivity : ComponentActivity() {
         setContent {
             BusNowBarTheme { BusNowBarRoot() }
         }
+        // API 키 입력칸에 브라우저에서 저장된 자동완성 제안(예: data.go.kr 에서 저장한 값)이
+        // 그대로 뜨는 걸 막는다 — 이 앱엔 자동완성이 필요한 입력이 없다.
+        findViewById<View>(android.R.id.content).importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
     }
 }
 
@@ -80,6 +84,7 @@ private fun BusNowBarRoot() {
         Screen.Home -> HomeScreen(
             state = HomeState(
                 apiKey = settings.apiKey,
+                cartoApiKey = settings.cartoApiKey,
                 enabled = settings.enabled,
                 isConfigured = settings.isConfigured,
                 stops = settings.stops,

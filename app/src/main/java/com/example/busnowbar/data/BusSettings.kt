@@ -1,7 +1,6 @@
 package com.example.busnowbar.data
 
 import android.content.Context
-import com.example.busnowbar.BuildConfig
 import com.example.busnowbar.util.DailySchedule
 import java.time.DayOfWeek
 import kotlin.math.abs
@@ -38,11 +37,10 @@ data class AlertSchedule(
 data class BusSettings(
     /** 전체 기능 켜기/끄기. 꺼져 있으면 예약된 자동 폴링을 하지 않는다("지금 폴링 테스트"는 예외). */
     val enabled: Boolean = true,
-    /**
-     * 서울시 버스 Open API 서비스키. 화면에서 입력받지 않고 빌드 시점에 구워 넣는다
-     * (local.properties 의 BUS_API_KEY — 커밋되지 않음).
-     */
-    val apiKey: String = BuildConfig.BUS_API_KEY,
+    /** 서울시 버스 Open API 서비스키. 처음 설치하면 비어 있고, 설정 화면에서 입력해야 한다. */
+    val apiKey: String = "",
+    /** CARTO 베이스맵 API 키. 처음 설치하면 비어 있고, 설정 화면에서 입력해야 한다(없어도 지도는 동작). */
+    val cartoApiKey: String = "",
     val stops: List<MonitoredStop> = emptyList(),
     /** 알림 일정 목록. 일정마다 요일/시간대/일시정지를 따로 가진다. */
     val schedules: List<AlertSchedule> = listOf(AlertSchedule(id = 1)),
@@ -64,6 +62,8 @@ class BusSettingsStore(context: Context) {
 
     fun load(): BusSettings = BusSettings(
         enabled = prefs.getBoolean(KEY_ENABLED, true),
+        apiKey = prefs.getString(KEY_API_KEY, "").orEmpty(),
+        cartoApiKey = prefs.getString(KEY_CARTO_API_KEY, "").orEmpty(),
         stops = parseStops(prefs.getString(KEY_STOPS, null)),
         schedules = loadSchedules(),
         pollIntervalSeconds = nearestPollInterval(
@@ -74,6 +74,8 @@ class BusSettingsStore(context: Context) {
     fun save(settings: BusSettings) {
         prefs.edit()
             .putBoolean(KEY_ENABLED, settings.enabled)
+            .putString(KEY_API_KEY, settings.apiKey)
+            .putString(KEY_CARTO_API_KEY, settings.cartoApiKey)
             .putString(KEY_STOPS, serializeStops(settings.stops))
             .putString(KEY_SCHEDULES, serializeSchedules(settings.schedules))
             .putInt(KEY_POLL_INTERVAL_SECONDS, settings.pollIntervalSeconds)
@@ -187,6 +189,8 @@ class BusSettingsStore(context: Context) {
     companion object {
         private const val PREFS_NAME = "bus_settings"
         private const val KEY_ENABLED = "enabled"
+        private const val KEY_API_KEY = "api_key"
+        private const val KEY_CARTO_API_KEY = "carto_api_key"
         private const val KEY_STOPS = "stops"
         private const val KEY_SCHEDULES = "schedules"
 
