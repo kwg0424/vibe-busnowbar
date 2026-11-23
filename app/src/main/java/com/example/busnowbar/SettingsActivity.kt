@@ -2,7 +2,6 @@ package com.example.busnowbar
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -96,8 +95,6 @@ private fun SettingsRoot(onFinish: () -> Unit) {
             // 일정(시작 시각/요일/일시정지)이나 켜짐 여부가 바뀌었을 수 있으니 이미 걸려있던 알람을 다시 예약한다 —
             // 이걸 안 하면 저장해도 예전 설정 그대로 알람이 울리거나(또는 안 꺼진다).
             BusAlarmScheduler.scheduleNextRun(context)
-            Toast.makeText(context, "저장했습니다", Toast.LENGTH_SHORT).show()
-            onFinish()
         },
         onClose = onFinish,
     )

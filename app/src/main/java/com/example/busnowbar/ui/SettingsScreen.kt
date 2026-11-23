@@ -72,6 +72,26 @@ fun SettingsScreen(
         }
     }
 
+    // 버튼을 따로 두지 않고, 값이 바뀔 때(완료 버튼 누름/토글/일정 변경 등)마다 즉시 저장한다.
+    fun save(
+        newEnabled: Boolean = enabled,
+        newApiKey: String = apiKey,
+        newCartoApiKey: String = cartoApiKey,
+        newSchedules: List<AlertSchedule> = schedules,
+        newPollIntervalSeconds: Int = pollIntervalSeconds,
+    ) {
+        onSave(
+            BusSettings(
+                enabled = newEnabled,
+                apiKey = newApiKey,
+                cartoApiKey = newCartoApiKey,
+                stops = initial.stops,
+                schedules = newSchedules,
+                pollIntervalSeconds = newPollIntervalSeconds,
+            ),
+        )
+    }
+
     Scaffold(
         containerColor = Ink,
         topBar = {
@@ -105,7 +125,7 @@ fun SettingsScreen(
                     title = "전체 기능",
                     subtitle = if (enabled) "자동으로 알림을 갱신합니다" else "꺼져 있으면 자동 갱신을 하지 않습니다",
                 ) {
-                    Switch(checked = enabled, onCheckedChange = { enabled = it })
+                    Switch(checked = enabled, onCheckedChange = { enabled = it; save(newEnabled = it) })
                 }
             }
 
@@ -115,9 +135,21 @@ fun SettingsScreen(
             ) {
                 SectionCard {
                     Text("API", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
-                    ApiKeyRow(label = "서울 버스 API", value = apiKey, enabled = enabled, onValueChange = { apiKey = it })
+                    ApiKeyRow(
+                        label = "서울 버스 API",
+                        value = apiKey,
+                        enabled = enabled,
+                        onValueChange = { apiKey = it },
+                        onDone = { save(newApiKey = apiKey) },
+                    )
                     HorizontalDivider(color = Surface2)
-                    ApiKeyRow(label = "CARTO API", value = cartoApiKey, enabled = enabled, onValueChange = { cartoApiKey = it })
+                    ApiKeyRow(
+                        label = "CARTO API",
+                        value = cartoApiKey,
+                        enabled = enabled,
+                        onValueChange = { cartoApiKey = it },
+                        onDone = { save(newCartoApiKey = cartoApiKey) },
+                    )
                 }
 
                 SectionCard {
@@ -192,16 +224,24 @@ fun SettingsScreen(
                             schedule = schedule,
                             enabled = enabled,
                             onChange = { updated ->
-                                schedules = schedules.map { if (it.id == updated.id) updated else it }
+                                val newSchedules = schedules.map { if (it.id == updated.id) updated else it }
+                                schedules = newSchedules
+                                save(newSchedules = newSchedules)
                             },
-                            onDelete = { schedules = schedules.filter { it.id != schedule.id } },
+                            onDelete = {
+                                val newSchedules = schedules.filter { it.id != schedule.id }
+                                schedules = newSchedules
+                                save(newSchedules = newSchedules)
+                            },
                             onPickTime = { isStart -> pickerTarget = schedule.id to isStart },
                         )
                     }
                     OutlinedButton(
                         onClick = {
                             val nextId = (schedules.maxOfOrNull { it.id } ?: 0L) + 1
-                            schedules = schedules + AlertSchedule(id = nextId)
+                            val newSchedules = schedules + AlertSchedule(id = nextId)
+                            schedules = newSchedules
+                            save(newSchedules = newSchedules)
                         },
                         enabled = enabled,
                         modifier = Modifier.fillMaxWidth(),
@@ -219,28 +259,16 @@ fun SettingsScreen(
                                 label = "${seconds}초",
                                 selected = pollIntervalSeconds == seconds,
                                 enabled = enabled,
-                                onClick = { pollIntervalSeconds = seconds },
+                                onClick = {
+                                    pollIntervalSeconds = seconds
+                                    save(newPollIntervalSeconds = seconds)
+                                },
                                 modifier = Modifier.weight(1f),
                             )
                         }
                     }
                 }
             }
-
-            Button(
-                onClick = {
-                    val settings = BusSettings(
-                        enabled = enabled,
-                        apiKey = apiKey,
-                        cartoApiKey = cartoApiKey,
-                        stops = initial.stops,
-                        schedules = schedules,
-                        pollIntervalSeconds = pollIntervalSeconds,
-                    )
-                    onSave(settings)
-                },
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text("저장") }
         }
     }
 
@@ -261,7 +289,9 @@ fun SettingsScreen(
                     else {
                         target.copy(endHour = hour, endMinute = minute)
                     }
-                    schedules = schedules.map { if (it.id == scheduleId) updated else it }
+                    val newSchedules = schedules.map { if (it.id == scheduleId) updated else it }
+                    schedules = newSchedules
+                    save(newSchedules = newSchedules)
                     pickerTarget = null
                 },
             )
@@ -361,7 +391,13 @@ private fun ScheduleEditor(
 
 /** 키가 있으면 끝 4자리만 보여주고 "변경"을 눌러야 입력칸이 뜬다. 비어 있으면 바로 입력칸을 보여준다. */
 @Composable
-private fun ApiKeyRow(label: String, value: String, enabled: Boolean, onValueChange: (String) -> Unit) {
+private fun ApiKeyRow(
+    label: String,
+    value: String,
+    enabled: Boolean,
+    onValueChange: (String) -> Unit,
+    onDone: () -> Unit,
+) {
     var editing by remember(label) { mutableStateOf(value.isBlank()) }
 
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -379,7 +415,7 @@ private fun ApiKeyRow(label: String, value: String, enabled: Boolean, onValueCha
                     modifier = Modifier.weight(1f),
                 )
                 if (value.isNotBlank()) {
-                    TextButton(onClick = { editing = false }, enabled = enabled) { Text("완료") }
+                    TextButton(onClick = { editing = false; onDone() }, enabled = enabled) { Text("완료") }
                 }
             }
         }
