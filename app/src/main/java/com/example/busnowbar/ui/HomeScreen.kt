@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -17,6 +20,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,7 +58,6 @@ private data class RoutePickerState(
 
 data class HomeState(
     val apiKey: String,
-    val cartoApiKey: String,
     val enabled: Boolean,
     val isConfigured: Boolean,
     val stops: List<MonitoredStop>,
@@ -68,6 +71,7 @@ data class HomeState(
 fun HomeScreen(
     state: HomeState,
     onOpenSettings: () -> Unit,
+    onStartAlert: () -> Unit,
     onStopsChanged: (List<MonitoredStop>) -> Unit,
 ) {
     val context = LocalContext.current
@@ -76,6 +80,7 @@ fun HomeScreen(
     var statusMessage by remember { mutableStateOf<String?>(null) }
     var showMap by remember { mutableStateOf(false) }
     var locating by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<MonitoredStop?>(null) }
     var stationCandidates by remember { mutableStateOf<List<NearbyStation>?>(null) }
     var routePicker by remember { mutableStateOf<RoutePickerState?>(null) }
 
@@ -137,7 +142,8 @@ fun HomeScreen(
 
     fun onFindStationByGpsClick() {
         if (state.apiKey.isBlank()) {
-            statusMessage = "설정 > API 에서 서울 버스 API 키를 먼저 입력하세요"
+            // 키가 없을 때의 안내는 아래 고정 문구 하나만 보여준다(중복 표시 방지).
+            statusMessage = null
             return
         }
         if (Permissions.hasLocationAccess(context)) {
@@ -150,7 +156,8 @@ fun HomeScreen(
 
     fun onFindStationByMapClick() {
         if (state.apiKey.isBlank()) {
-            statusMessage = "설정 > API 에서 서울 버스 API 키를 먼저 입력하세요"
+            // 키가 없을 때의 안내는 아래 고정 문구 하나만 보여준다(중복 표시 방지).
+            statusMessage = null
             return
         }
         statusMessage = null
@@ -205,15 +212,27 @@ fun HomeScreen(
             SectionCard {
                 Text("정류소 추가", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
                 Text(
-                    "현재 위치 주변 정류소를 찾아, 그 정류소를 지나는 노선 중 알림받을 것을 체크해서 추가합니다.",
+                    "정류소를 찾아 알림받을 노선을 추가합니다.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextMuted,
                 )
-                Button(
-                    onClick = { onFindStationByGpsClick() },
-                    enabled = !locating,
+                // 두 버튼을 한 줄에 좌우로 나란히 둔다.
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text(if (locating) "위치 확인 중…" else "내 정류소 찾기 (GPS)") }
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { onFindStationByGpsClick() },
+                        enabled = !locating,
+                        modifier = Modifier.weight(1f),
+                    ) { Text(if (locating) "확인 중…" else "GPS로 찾기") }
+
+                    // OpenStreetMap 은 API 키가 필요 없어서 항상 쓸 수 있다.
+                    Button(
+                        onClick = { onFindStationByMapClick() },
+                        modifier = Modifier.weight(1f),
+                    ) { Text("지도로 찾기") }
+                }
 
                 if (state.apiKey.isBlank()) {
                     Text(
@@ -223,19 +242,57 @@ fun HomeScreen(
                     )
                 }
 
-                // OpenStreetMap 은 API 키가 필요 없어서 항상 쓸 수 있다.
-                Button(
-                    onClick = { onFindStationByMapClick() },
-                    modifier = Modifier.fillMaxWidth(),
-                ) { Text("내 정류소 찾기 (지도)") }
-
                 statusMessage?.let {
                     Text(it, style = MaterialTheme.typography.bodySmall, color = Amber)
                 }
             }
 
             SectionCard {
-                Text("내 정류소 목록", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        "내 정류소 목록",
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = TextPrimary,
+                    )
+                    // 누르면 일정과 무관하게 지금부터 1분간 도착 알림을 받는다.
+                    // 기본 터치 영역(48dp)이 높이를 키우므로 끈다.
+                    androidx.compose.runtime.CompositionLocalProvider(
+                        androidx.compose.material3.LocalMinimumInteractiveComponentSize provides androidx.compose.ui.unit.Dp.Unspecified,
+                    ) {
+                        // 누르면 10초간 비활성화하고 그동안 진행 표시를 보여준다(결과 콜백이 없어 요청했다는 표시용).
+                        var alertBusy by remember { mutableStateOf(false) }
+                        LaunchedEffect(alertBusy) {
+                            if (alertBusy) {
+                                kotlinx.coroutines.delay(10_000)
+                                alertBusy = false
+                            }
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                alertBusy = true
+                                onStartAlert()
+                            },
+                            enabled = state.isConfigured && !alertBusy,
+                            modifier = Modifier.defaultMinSize(minWidth = 1.dp, minHeight = 1.dp).height(28.dp),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                        ) {
+                            if (alertBusy) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(14.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Teal,
+                                )
+                            }
+                            else {
+                                Text("알림", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
                 if (state.stops.isEmpty()) {
                     Text(
                         "등록된 정류소가 없습니다",
@@ -253,7 +310,7 @@ fun HomeScreen(
                                 Text(stop.stopName, style = MaterialTheme.typography.bodyMedium, color = TextPrimary)
                                 Text(stop.routeName, style = MaterialTheme.typography.bodySmall, color = TextMuted)
                             }
-                            TextButton(onClick = { onStopsChanged(state.stops - stop) }) {
+                            TextButton(onClick = { pendingDelete = stop }) {
                                 Text("삭제", color = Danger)
                             }
                         }
@@ -263,6 +320,21 @@ fun HomeScreen(
 
             Spacer(Modifier.height(16.dp))
         }
+    }
+
+    pendingDelete?.let { stop ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("정류소 삭제") },
+            text = { Text("${stop.stopName} (${stop.routeName})을(를) 목록에서 지울까요?") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onStopsChanged(state.stops - stop)
+                    pendingDelete = null
+                }) { Text("삭제", color = Danger) }
+            },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("취소") } },
+        )
     }
 
     stationCandidates?.let { stations ->
@@ -297,7 +369,6 @@ fun HomeScreen(
     if (showMap) {
         StationMapDialog(
             apiKey = state.apiKey,
-            cartoApiKey = state.cartoApiKey,
             onDismiss = { showMap = false },
             onStationSelected = { station ->
                 showMap = false

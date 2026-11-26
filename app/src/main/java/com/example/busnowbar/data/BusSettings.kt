@@ -39,8 +39,6 @@ data class BusSettings(
     val enabled: Boolean = true,
     /** 서울시 버스 Open API 서비스키. 처음 설치하면 비어 있고, 설정 화면에서 입력해야 한다. */
     val apiKey: String = "",
-    /** CARTO 베이스맵 API 키. 처음 설치하면 비어 있고, 설정 화면에서 입력해야 한다(없어도 지도는 동작). */
-    val cartoApiKey: String = "",
     val stops: List<MonitoredStop> = emptyList(),
     /** 알림 일정 목록. 일정마다 요일/시간대/일시정지를 따로 가진다. */
     val schedules: List<AlertSchedule> = listOf(AlertSchedule(id = 1)),
@@ -52,7 +50,7 @@ data class BusSettings(
 
     companion object {
         const val DEFAULT_POLL_INTERVAL_SECONDS = 30
-        val POLL_INTERVAL_OPTIONS = listOf(10, 15, 30)
+        val POLL_INTERVAL_OPTIONS = listOf(10, 20, 30)
     }
 }
 
@@ -63,7 +61,6 @@ class BusSettingsStore(context: Context) {
     fun load(): BusSettings = BusSettings(
         enabled = prefs.getBoolean(KEY_ENABLED, true),
         apiKey = prefs.getString(KEY_API_KEY, "").orEmpty(),
-        cartoApiKey = prefs.getString(KEY_CARTO_API_KEY, "").orEmpty(),
         stops = parseStops(prefs.getString(KEY_STOPS, null)),
         schedules = loadSchedules(),
         pollIntervalSeconds = nearestPollInterval(
@@ -75,7 +72,6 @@ class BusSettingsStore(context: Context) {
         prefs.edit()
             .putBoolean(KEY_ENABLED, settings.enabled)
             .putString(KEY_API_KEY, settings.apiKey)
-            .putString(KEY_CARTO_API_KEY, settings.cartoApiKey)
             .putString(KEY_STOPS, serializeStops(settings.stops))
             .putString(KEY_SCHEDULES, serializeSchedules(settings.schedules))
             .putInt(KEY_POLL_INTERVAL_SECONDS, settings.pollIntervalSeconds)
@@ -190,7 +186,6 @@ class BusSettingsStore(context: Context) {
         private const val PREFS_NAME = "bus_settings"
         private const val KEY_ENABLED = "enabled"
         private const val KEY_API_KEY = "api_key"
-        private const val KEY_CARTO_API_KEY = "carto_api_key"
         private const val KEY_STOPS = "stops"
         private const val KEY_SCHEDULES = "schedules"
 

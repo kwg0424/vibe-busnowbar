@@ -58,7 +58,6 @@ fun SettingsScreen(
 ) {
     var enabled by remember { mutableStateOf(initial.enabled) }
     var apiKey by remember { mutableStateOf(initial.apiKey) }
-    var cartoApiKey by remember { mutableStateOf(initial.cartoApiKey) }
     var schedules by remember { mutableStateOf(initial.schedules) }
     // 시간 선택 중인 일정(id)과 시작/종료 구분. null 이면 다이얼로그가 닫힌 상태.
     var pickerTarget by remember { mutableStateOf<Pair<Long, Boolean>?>(null) }
@@ -76,7 +75,6 @@ fun SettingsScreen(
     fun save(
         newEnabled: Boolean = enabled,
         newApiKey: String = apiKey,
-        newCartoApiKey: String = cartoApiKey,
         newSchedules: List<AlertSchedule> = schedules,
         newPollIntervalSeconds: Int = pollIntervalSeconds,
     ) {
@@ -84,7 +82,6 @@ fun SettingsScreen(
             BusSettings(
                 enabled = newEnabled,
                 apiKey = newApiKey,
-                cartoApiKey = newCartoApiKey,
                 stops = initial.stops,
                 schedules = newSchedules,
                 pollIntervalSeconds = newPollIntervalSeconds,
@@ -119,6 +116,35 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            // 권한 — 최상단. 모두 허용되면 숨긴다. 전체 기능이 꺼져 있어도 항상 눌릴 수 있도록 음영 블록 밖에 둔다.
+            val allGranted = permissionState.notificationGranted &&
+                permissionState.exactAlarmGranted &&
+                permissionState.promotedNotificationGranted
+            if (!allGranted) {
+                SectionCard {
+                    Text("권한", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
+                    // 아직 허용 안 된 권한만 보여준다.
+                    if (!permissionState.notificationGranted) {
+                        PermissionRow("알림", false)
+                    }
+                    if (!permissionState.exactAlarmGranted) {
+                        PermissionRow("정확한 알람", false)
+                    }
+                    if (!permissionState.promotedNotificationGranted) {
+                        PermissionRow("Now Bar 승격", false)
+                        Text(
+                            "이게 꺼져 있으면 알림은 뜨지만 Now Bar(잠금화면 상단)에는 올라가지 않습니다.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextMuted,
+                        )
+                    }
+                    Button(
+                        onClick = onRequestPermission,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) { Text("권한 요청") }
+                }
+            }
+
             // 전체 기능 스위치는 항상 눌릴 수 있어야 하므로 아래 음영 처리 블록 밖에 둔다.
             SectionCard {
                 LabeledRow(
@@ -142,68 +168,6 @@ fun SettingsScreen(
                         onValueChange = { apiKey = it },
                         onDone = { save(newApiKey = apiKey) },
                     )
-                    HorizontalDivider(color = Surface2)
-                    ApiKeyRow(
-                        label = "CARTO API",
-                        value = cartoApiKey,
-                        enabled = enabled,
-                        onValueChange = { cartoApiKey = it },
-                        onDone = { save(newCartoApiKey = cartoApiKey) },
-                    )
-                }
-
-                SectionCard {
-                    val allGranted = permissionState.notificationGranted &&
-                        permissionState.exactAlarmGranted &&
-                        permissionState.promotedNotificationGranted
-                    Text("권한", style = MaterialTheme.typography.titleSmall, color = TextPrimary)
-                    if (allGranted) {
-                        Text("모두 허용되었습니다", style = MaterialTheme.typography.bodySmall, color = TextMuted)
-                    }
-                    else {
-                        // 아직 허용 안 된 권한만 보여준다.
-                        if (!permissionState.notificationGranted) {
-                            PermissionRow("알림", false)
-                        }
-                        if (!permissionState.exactAlarmGranted) {
-                            PermissionRow("정확한 알람", false)
-                        }
-                        if (!permissionState.promotedNotificationGranted) {
-                            PermissionRow("Now Bar 승격", false)
-                            Text(
-                                "이게 꺼져 있으면 알림은 뜨지만 Now Bar(잠금화면 상단)에는 올라가지 않습니다.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextMuted,
-                            )
-                        }
-                        Button(
-                            onClick = onRequestPermission,
-                            enabled = enabled,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) { Text("권한 요청") }
-                    }
-                }
-
-                OutlinedButton(
-                    onClick = {
-                        testing = true
-                        onTestPolling()
-                    },
-                    enabled = initial.isConfigured && !testing,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    if (testing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(18.dp),
-                            strokeWidth = 2.dp,
-                            color = Teal,
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text("요청 중… 알림을 확인하세요")
-                    }
-                    else {
-                        Text("버스 알림 테스트")
-                    }
                 }
 
                 SectionCard {
@@ -245,7 +209,7 @@ fun SettingsScreen(
                         },
                         enabled = enabled,
                         modifier = Modifier.fillMaxWidth(),
-                    ) { Text("+ 일정 추가") }
+                    ) { Text("일정 추가") }
                 }
 
                 SectionCard {
@@ -415,7 +379,7 @@ private fun ApiKeyRow(
                     modifier = Modifier.weight(1f),
                 )
                 if (value.isNotBlank()) {
-                    TextButton(onClick = { editing = false; onDone() }, enabled = enabled) { Text("완료") }
+                    TextButton(onClick = { editing = false; onDone() }, enabled = enabled) { Text("저장") }
                 }
             }
         }

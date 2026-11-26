@@ -45,13 +45,16 @@ class BusPollingService : Service() {
         )
 
         BusAlarmScheduler.scheduleNextRun(this)
-        startPolling(force = intent?.getBooleanExtra(EXTRA_FORCE, false) ?: false)
+        startPolling(
+            force = intent?.getBooleanExtra(EXTRA_FORCE, false) ?: false,
+            durationMs = intent?.getLongExtra(EXTRA_DURATION_MS, SESSION_DURATION_MS) ?: SESSION_DURATION_MS,
+        )
 
         return START_NOT_STICKY
     }
 
-    /** [force]가 true면 설정된 시간창을 무시하고 지금부터 10분간 돌린다 — 수동 테스트 버튼용. */
-    private fun startPolling(force: Boolean) {
+    /** [force]가 true면 설정된 시간창을 무시하고 지금부터 [durationMs] 동안 돌린다(기본 10분) — 수동 테스트·알림 버튼용. */
+    private fun startPolling(force: Boolean, durationMs: Long) {
         pollingJob?.cancel()
         pollingJob = serviceScope.launch {
             val settings = BusSettingsStore(this@BusPollingService).load()
@@ -75,7 +78,7 @@ class BusPollingService : Service() {
 
             val now = System.currentTimeMillis()
             val endAt = if (force) {
-                now + SESSION_DURATION_MS
+                now + durationMs
             }
             else {
                 // 지금 진행 중인 일정(오늘 요일 + 시간창 + 일시정지 아님)이 없으면 돌지 않는다.
@@ -192,5 +195,8 @@ class BusPollingService : Service() {
         private const val PROGRESS_STEP_MS = 5_000L
         private const val SESSION_DURATION_MS = 10 * 60 * 1000L
         const val EXTRA_FORCE = "force"
+
+        /** force 일 때 돌릴 시간(ms). 없으면 10분. */
+        const val EXTRA_DURATION_MS = "duration_ms"
     }
 }

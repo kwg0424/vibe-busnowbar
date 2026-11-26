@@ -13,6 +13,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
+import com.example.busnowbar.work.BusPollingService
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -58,7 +60,6 @@ private fun BusNowBarRoot() {
     HomeScreen(
         state = HomeState(
             apiKey = settings.apiKey,
-            cartoApiKey = settings.cartoApiKey,
             enabled = settings.enabled,
             isConfigured = settings.isConfigured,
             stops = settings.stops,
@@ -72,6 +73,13 @@ private fun BusNowBarRoot() {
             pollIntervalSeconds = settings.pollIntervalSeconds,
         ),
         onOpenSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) },
+            // 내 정류소 목록의 알림 버튼 — 일정과 무관하게 지금부터 1분간 알림을 받는다.
+            onStartAlert = {
+                val intent = Intent(context, BusPollingService::class.java)
+                    .putExtra(BusPollingService.EXTRA_FORCE, true)
+                    .putExtra(BusPollingService.EXTRA_DURATION_MS, 60_000L)
+                ContextCompat.startForegroundService(context, intent)
+            },
         onStopsChanged = { updatedStops ->
             val updated = settings.copy(stops = updatedStops)
             settingsStore.save(updated)

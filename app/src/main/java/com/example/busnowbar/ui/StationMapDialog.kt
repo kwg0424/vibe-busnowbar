@@ -57,7 +57,10 @@ import org.osmdroid.events.DelayedMapListener
 import org.osmdroid.events.MapListener
 import org.osmdroid.events.ScrollEvent
 import org.osmdroid.events.ZoomEvent
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.tileprovider.tilesource.XYTileSource
+import java.net.HttpURLConnection
+import java.net.URL
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
@@ -73,7 +76,45 @@ private const val MAX_STATIONS = 5
 private const val DEFAULT_LAT = 37.5665
 private const val DEFAULT_LNG = 126.9780
 /** 처음 열었을 때 줌 — 기존 16.0 의 1.5배 축척(log2(1.5) ≈ 0.585 레벨 추가). */
-private const val DEFAULT_ZOOM = 16.585
+private const val DEFAULT_ZOOM = 19.0
+
+/** 정류소 마커 — 배경색을 칠한 둥근 라벨 + 아래 꼭짓점(핀 끝이 정류소 좌표). */
+private fun stationLabelIcon(context: Context, text: String): android.graphics.drawable.BitmapDrawable {
+    val density = context.resources.displayMetrics.density
+    val textPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        textSize = 12f * density
+        isFakeBoldText = true
+    }
+    val padH = 8f * density
+    val padV = 5f * density
+    val tail = 7f * density
+    val textW = textPaint.measureText(text)
+    val fm = textPaint.fontMetrics
+    val boxH = (fm.descent - fm.ascent) + padV * 2
+    val w = (textW + padH * 2).toInt() + 2
+    val h = (boxH + tail).toInt() + 2
+    val bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val fill = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xE6118A74.toInt() }
+    val stroke = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = android.graphics.Color.WHITE
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = 1.5f * density
+    }
+    val box = android.graphics.RectF(1f, 1f, w - 1f, boxH)
+    canvas.drawRoundRect(box, 8f * density, 8f * density, fill)
+    canvas.drawRoundRect(box, 8f * density, 8f * density, stroke)
+    val path = android.graphics.Path().apply {
+        moveTo(w / 2f - tail, boxH - 1f)
+        lineTo(w / 2f, boxH + tail)
+        lineTo(w / 2f + tail, boxH - 1f)
+        close()
+    }
+    canvas.drawPath(path, fill)
+    canvas.drawText(text, padH, padV - fm.ascent, textPaint)
+    return android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
+}
 
 /** 지도를 움직이다 멈춘 걸로 보고 재검색하기까지 기다리는 시간(ms). */
 private const val MAP_SETTLE_MS = 400L
@@ -92,7 +133,6 @@ private const val OSM_COPYRIGHT_URL = "https://www.openstreetmap.org/copyright"
 @Composable
 fun StationMapDialog(
     apiKey: String,
-    cartoApiKey: String,
     onDismiss: () -> Unit,
     onStationSelected: (NearbyStation) -> Unit,
 ) {
@@ -100,6 +140,15 @@ fun StationMapDialog(
     val uriHandler = LocalUriHandler.current
 
     var mapView by remember { mutableStateOf<MapView?>(null) }
+
+    // OSM 공식 타일 서버가 403 등으로 막혀 있으면 CARTO 로 바꿔서 보여준다.
+    var useCarto by remember { mutableStateOf(osmBlockedCache == true) }
+    LaunchedEffect(Unit) {
+        useCarto = isOsmBlocked(context)
+    }
+    LaunchedEffect(useCarto, mapView) {
+        mapView?.setTileSource(if (useCarto) cartoTileSource() else osmTileSource())
+    }
     var centerLat by remember { mutableStateOf(DEFAULT_LAT) }
     var centerLng by remember { mutableStateOf(DEFAULT_LNG) }
 
@@ -212,7 +261,7 @@ fun StationMapDialog(
                             // MapView 를 만들기 전에 끝내야 한다 — 첫 타일 요청이 바로 나가기 때문.
                             ensureOsmConfigured(ctx)
                             MapView(ctx).apply {
-                                setTileSource(osmTileSource(cartoApiKey))
+                                setTileSource(if (useCarto) cartoTileSource() else osmTileSource())
                                 setMultiTouchControls(true)
                                 zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
                                 controller.setZoom(DEFAULT_ZOOM)
@@ -266,7 +315,7 @@ fun StationMapDialog(
                                             // osmdroid 마커들은 기본 말풍선(InfoWindow)을 지도당 하나만 공유해서
                                             // showInfoWindow() 를 여러 개 동시에 띄울 수 없다 — 대신 마커 자체를
                                             // 이름·ID 글자 라벨로 그려서(setTextIcon) 항상 다 보이게 한다.
-                                            setTextIcon("${station.name} · ${station.arsId}")
+                                            icon = stationLabelIcon(map.context, "${station.name} · ${station.arsId}")
                                             setOnMarkerClickListener { _, _ ->
                                                 onStationSelected(station)
                                                 true
@@ -341,20 +390,63 @@ fun StationMapDialog(
     }
 }
 
+@Volatile
+private var osmBlockedCache: Boolean? = null
+
+/**
+ * OSM 공식 타일 서버가 이 앱을 막고 있는지 타일 한 장으로 확인한다(403/429 등 4xx 면 막힘).
+ * 네트워크 오류는 막힘으로 보지 않고(캐시도 안 함) OSM 을 그대로 쓴다.
+ */
+private suspend fun isOsmBlocked(context: Context): Boolean {
+    osmBlockedCache?.let { return it }
+    applyOsmUserAgent(context.applicationContext)
+    val blocked = withContext(Dispatchers.IO) {
+        runCatching {
+            val conn = URL("https://tile.openstreetmap.org/0/0/0.png").openConnection() as HttpURLConnection
+            try {
+                conn.setRequestProperty("User-Agent", Configuration.getInstance().userAgentValue)
+                conn.connectTimeout = 5_000
+                conn.readTimeout = 5_000
+                conn.responseCode in 400..499
+            }
+            finally {
+                conn.disconnect()
+            }
+        }.getOrNull()
+    }
+    if (blocked != null) {
+        osmBlockedCache = blocked
+    }
+    return blocked ?: false
+}
+
 /**
  * `tile.openstreetmap.org`(osm.org 메인 서버, [TileSourceFactory.MAPNIK])는 정책상
- * 가벼운 테스트·소규모 트래픽만 허용한다 — 배포 앱이 쓰면 UA/캐시를 다 맞춰도
- * 결국 403 Forbidden 으로 막힌다("Access blocked" 플레이스홀더조차 안 내려주고 하드 차단).
+ * 가벼운 테스트·소규모 트래픽만 허용해서, 배포 앱이 쓰면 결국 403 Forbidden 으로 막힐 수 있다.
+ * 그래서 OSM 을 먼저 쓰고([isOsmBlocked]) 막혀 있으면 이 CARTO 타일로 바꾼다.
  *
  * CARTO는 OSM 데이터를 쓰는 별도 CDN으로, API 키 없이 앱에서 상시 사용해도 되는 타일을
  * 제공한다(switch2osm 권장 대체 서버). 저작자 표시는 여전히 "© OpenStreetMap" 필수.
  */
-private fun osmTileSource(cartoApiKey: String) = XYTileSource(
+/**
+ * OSM 공식 타일. osmdroid 기본 MAPNIK 은 a/b/c 서브도메인(구형 방식)을 써서 더 엄격하게 막히므로,
+ * 현재 권장 주소인 `tile.openstreetmap.org` 하나만 쓴다(parkspot 과 같은 방식).
+ */
+private fun osmTileSource() = XYTileSource(
+    "OsmStandard",
+    0,
+    19,
+    256,
+    ".png",
+    arrayOf("https://tile.openstreetmap.org/"),
+)
+
+private fun cartoTileSource() = XYTileSource(
     "CartoVoyager",
     0,
     19,
     256,
-    if (cartoApiKey.isBlank()) ".png" else ".png?key=$cartoApiKey",
+    ".png",
     arrayOf(
         "https://a.basemaps.cartocdn.com/rastertiles/voyager/",
         "https://b.basemaps.cartocdn.com/rastertiles/voyager/",

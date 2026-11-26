@@ -36,10 +36,9 @@ cd D:\work\andriod\busnowbar
 
 ## 비밀값
 
-- `local.properties` — 둘 다 gitignore 대상, 빌드 시점에 `BuildConfig`로 주입(현재 앱은 이 값을 자동으로 읽어 쓰지 않는다 — 아래 참고).
+- `local.properties` — gitignore 대상, 빌드 시점에 `BuildConfig`로 주입(현재 앱은 이 값을 자동으로 읽어 쓰지 않는다 — 아래 참고).
   - `BUS_API_KEY` — 서울시 버스 Open API 서비스키 → `BuildConfig.BUS_API_KEY`
-  - `CARTO_API_KEY` — CARTO 베이스맵 API 키 → `BuildConfig.CARTO_API_KEY`
-- 설정 화면(API 섹션)에서 두 키를 입력한다 — `BusSettingsStore`에 저장되고, **처음 설치하면 둘 다 빈 값**이라 사용자가 직접 넣어야 한다(`BusSettings.apiKey`/`cartoApiKey` 기본값이 `""`). `BuildConfig`의 값으로 자동 채워지지 않는다 — 앱을 배포할 때 개발자 키가 그대로 설치되는 걸 막기 위함.
+- 설정 화면(API 섹션)에서 키를 입력한다 — `BusSettingsStore`에 저장되고, **처음 설치하면 빈 값**이라 사용자가 직접 넣어야 한다(`BusSettings.apiKey` 기본값이 `""`). `BuildConfig`의 값으로 자동 채워지지 않는다 — 앱을 배포할 때 개발자 키가 그대로 설치되는 걸 막기 위함.
 - `keystore.properties`, `busnowbar-release.jks` — 릴리스 서명
 
 ## 아키텍처
@@ -79,7 +78,7 @@ util/DailySchedule.kt      일정 계산 (순수 JVM — 유닛테스트 대상)
 
 ### OpenStreetMap 타일 (osmdroid)
 - `tile.openstreetmap.org`(osm.org 메인 서버, `TileSourceFactory.MAPNIK`)는 **가벼운 테스트용도만** 허용하는 정책이라, UA/캐시를 다 맞춰도 앱 트래픽이면 결국 막힌다. 차단 응답은 두 형태 모두 나올 수 있다 — "Access blocked" 이미지가 **HTTP 200**으로 오거나(코드로 구분 불가), 아예 **HTTP 403**으로 막히거나.
-  → 그래서 타일 소스를 `StationMapDialog.kt`의 `OsmTileSource`(CARTO Voyager, OSM 데이터 기반이지만 앱 상시 사용이 허용된 별도 CDN)로 교체했다. 메인 OSM 서버로 **되돌리지 말 것**. 저작자 표시("© OpenStreetMap")는 데이터 출처가 OSM이라 소스를 바꿔도 계속 유지해야 한다.
+  → 그래서 기본은 OSM(`TileSourceFactory.MAPNIK`)을 쓰되, 지도를 열 때 `StationMapDialog.kt`의 `isOsmBlocked`가 타일 한 장으로 확인해 **HTTP 4xx(403 등)이면 `cartoTileSource`(CARTO Voyager, OSM 데이터 기반이지만 앱 상시 사용이 허용된 별도 CDN)로 바꾼다**. HTTP 200으로 오는 "Access blocked" 이미지는 이 방식으로 감지하지 못한다. 저작자 표시("© OpenStreetMap")는 데이터 출처가 OSM이라 소스를 바꿔도 계속 유지해야 한다.
 - API 키 불필요. 대신 **타일 사용 정책**을 지켜야 하며, 어기면 타일 대신 "Access blocked" 이미지가 **HTTP 200으로** 내려와 코드로는 실패를 구분할 수 없다.
 - User-Agent는 `BusNowBar/<ver> (+저장소 URL)` 형식. 패키지명(`com.example.*`)을 쓰면 "설정 안 한 샘플 앱"으로 차단된다.
 - `MapView` 생성 중 osmdroid가 설정을 다시 읽어 UA를 되돌리므로, 생성 **직후에도 한 번 더** UA를 확정한다.
